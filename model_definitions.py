@@ -84,7 +84,7 @@ def dense_block(x, blocks, name):
 
 def transition_block(x, reduction, name):
     """A transition block.
-    
+
     Arguments:
         x: input tensor.
         reduction: float, compression rate at transition layers.
