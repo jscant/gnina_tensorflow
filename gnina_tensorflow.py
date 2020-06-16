@@ -5,6 +5,7 @@ Spyder Editor
 This is a temporary script file.
 """
 
+import argparse
 import os
 import torch
 import molgrid
@@ -14,12 +15,15 @@ from model_definitions import define_baseline_model, define_densefs_model
 
 import matplotlib.pyplot as plt
 
+parser = argparse.ArgumentParser()
+parser.add_argument("datadir", type=str, required=True)
+parser.add_argument("typesfile", type=str, required=True)
+args = parser.parse_args()
 
-datadir = 'data'
-data_root = os.path.join(datadir, 'structs')
-types_fname = os.path.join(datadir, 'small.types')
+data_root = os.path.abspath(args.datadir)
+types_fname = os.path.abspath(args.typesfile)
 
-batch_size = 16
+batch_size = 1
 
 e = molgrid.ExampleProvider(data_root=data_root, balanced=True, shuffle=True)
 e.populate(types_fname)

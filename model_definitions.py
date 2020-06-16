@@ -16,8 +16,12 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, MaxPooling3D,
 
 
 def define_baseline_model(dims):
-    """ Creates a 3D CNN by defining and applying layers simultaneously. """
-
+    """DenseFS network.
+    Arguments:
+        dims: tuple with input dimensions.
+    Returns:
+        Compiled keras model with DenseFS architecture
+    """
     input_layer = Input(shape=dims)
     pool0 = MaxPooling3D(data_format="channels_first")(input_layer)
     conv1 = Conv3D(filters=32, kernel_size=3,
@@ -46,7 +50,7 @@ def define_densefs_model(dims):
     Arguments:
         dims: tuple with input dimensions.
     Returns:
-        Compiled keras model
+        Compiled keras model with original gnina architecture
     """
     input_layer = Input(shape=dims, dtype=tf.float32)
     x = MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2),
