@@ -16,8 +16,8 @@ from model_definitions import define_baseline_model, define_densefs_model
 import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser()
-parser.add_argument("datadir", type=str, required=True)
-parser.add_argument("typesfile", type=str, required=True)
+parser.add_argument("datadir", type=str)
+parser.add_argument("typesfile", type=str)
 args = parser.parse_args()
 
 data_root = os.path.abspath(args.datadir)
