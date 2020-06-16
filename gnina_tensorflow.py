@@ -20,10 +20,11 @@ parser.add_argument("datadir", type=str)
 parser.add_argument("typesfile", type=str)
 args = parser.parse_args()
 
+molgrid.set_gpu_enabled(False)
 data_root = os.path.abspath(args.datadir)
 types_fname = os.path.abspath(args.typesfile)
 
-batch_size = 1
+batch_size = 16
 
 e = molgrid.ExampleProvider(data_root=data_root, balanced=True, shuffle=True)
 e.populate(types_fname)
@@ -32,14 +33,13 @@ batch = e.next_batch(batch_size)
 gmaker = molgrid.GridMaker()
 dims = gmaker.grid_dimensions(e.num_types())
 tensor_shape = (batch_size,) + dims
-model = define_densefs_model(dims)
 
 labels = molgrid.MGrid1f(batch_size)
 input_tensor = molgrid.MGrid5f(*tensor_shape)
 
-losses = []
 
-# train for 500 iterations
+densefs_model = define_densefs_model(dims)
+densefs_losses = []
 for iteration in range(1000):
     # load data
     batch = e.next_batch(batch_size)
@@ -47,28 +47,33 @@ for iteration in range(1000):
     gmaker.forward(batch, input_tensor, 0, random_rotation=True)
     batch.extract_label(0, labels)
 
-    loss = model.train_on_batch(input_tensor.tonumpy(), labels.tonumpy())
-    losses.append(float(loss))
+    print(input_tensor.tonumpy().__sizeof__())
+
+    loss = densefs_model.train_on_batch(
+        input_tensor.tonumpy(), labels.tonumpy())
+    densefs_losses.append(float(loss))
     print(iteration, 'loss: {0:0.3f}'.format(loss))
 print('Finished DenseFS\n\n')
 
-model2 = define_baseline_model(dims)
-losses_baseline = []
-for iteration in range(1000):
+
+baseline_model = define_baseline_model(dims)
+baseline_losses = []
+for iteration in range(100):
     batch = e.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=True)
-    batch.extract_label(0, labels)
-    loss = model2.train_on_batch(input_tensor.tonumpy(), labels.tonumpy())
-    losses_baseline.append(float(loss))
+    batch.extract_label(1, labels)
+    loss = baseline_model.train_on_batch(
+        input_tensor.tonumpy(), labels.tonumpy())
+    baseline_losses.append(float(loss))
     print(iteration, 'loss: {0:0.3f}'.format(loss))
-
 print('Finished Baseline\n\n')
+
 gap = 20
-losses = [np.mean(losses[window:window + gap])
-          for window in np.arange(0, 1000, step=gap)]
-losses_baseline = [np.mean(losses_baseline[window:window + gap])
+densefs_losses = [np.mean(densefs_losses[window:window + gap])
+                  for window in np.arange(0, 1000, step=gap)]
+baseline_losses = [np.mean(baseline_losses[window:window + gap])
                    for window in np.arange(0, 1000, step=gap)]
-plt.plot(np.arange(0, 1000, gap), losses)
-plt.plot(np.arange(0, 1000, gap), losses_baseline)
+plt.plot(np.arange(0, 1000, gap), densefs_losses)
+plt.plot(np.arange(0, 1000, gap), baseline_losses)
 plt.legend(['DenseFS', 'Baseline'])
 plt.savefig('losses.png')

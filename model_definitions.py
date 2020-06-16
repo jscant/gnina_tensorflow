@@ -22,24 +22,26 @@ def define_baseline_model(dims):
     Returns:
         Compiled keras model with DenseFS architecture
     """
-    input_layer = Input(shape=dims)
-    pool0 = MaxPooling3D(data_format="channels_first")(input_layer)
-    conv1 = Conv3D(filters=32, kernel_size=3,
-                   data_format="channels_first", activation="relu")(pool0)
-    pool1 = MaxPooling3D(data_format="channels_first")(conv1)
-    conv2 = Conv3D(filters=64, kernel_size=3,
-                   data_format="channels_first", activation="relu")(pool1)
-    pool2 = MaxPooling3D(data_format="channels_first")(conv2)
-    conv3 = Conv3D(filters=128, kernel_size=3,
-                   data_format="channels_first", activation="relu")(pool2)
+    input_layer = Input(shape=dims, dtype=tf.float32)
 
-    flatten = Flatten(data_format="channels_first")(conv3)
+    # Hidden layers
+    x = MaxPooling3D(2, 2, data_format="channels_first")(input_layer)
+    x = Conv3D(filters=32, kernel_size=3,
+               data_format="channels_first", activation="relu")(x)
+    x = MaxPooling3D(2, 2, data_format="channels_first")(x)
+    x = Conv3D(filters=64, kernel_size=3,
+               data_format="channels_first", activation="relu")(x)
+    x = MaxPooling3D(2, 2, data_format="channels_first")(x)
+    x = Conv3D(filters=128, kernel_size=3,
+               data_format="channels_first", activation="relu")(x)
 
-    fc1 = Dense(2, activation='softmax')(flatten)
+    # Final layer
+    x = Flatten(data_format="channels_first")(x)
+    output_layer = Dense(2, activation='softmax')(x)
 
-    # Define and return model
-    model = keras.models.Model(inputs=input_layer, outputs=fc1)
-    model.compile(optimizer=keras.optimizers.Adadelta(
+    # Compile and return model
+    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
+    model.compile(optimizer=keras.optimizers.SGD(
         lr=0.003), loss="sparse_categorical_crossentropy")
 
     return model
@@ -53,6 +55,8 @@ def define_densefs_model(dims):
         Compiled keras model with original gnina architecture
     """
     input_layer = Input(shape=dims, dtype=tf.float32)
+
+    # Hidden layers
     x = MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2),
                      padding='SAME', data_format='channels_first')(input_layer)
     x = Conv3D(32, 3, activation='relu', padding='SAME',
@@ -63,8 +67,12 @@ def define_densefs_model(dims):
     x = transition_block(x, 1.0, "tb_2")
     x = dense_block(x, 4, "db_3")
     x = transition_block(x, 1.0, "tb_3")
+
+    # Final layer
     x = Flatten(data_format='channels_first')(x)
     output_layer = Dense(2, activation='softmax')(x)
+
+    # Compile and return model
     model = keras.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.Adadelta(
         lr=0.003), loss='sparse_categorical_crossentropy')
