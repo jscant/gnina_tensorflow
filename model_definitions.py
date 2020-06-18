@@ -25,15 +25,15 @@ def define_baseline_model(dims):
     input_layer = Input(shape=dims, dtype=tf.float32)
 
     # Hidden layers
-    x = MaxPooling3D(2, 2, data_format="channels_first")(input_layer)
+    x = MaxPooling3D(2, 2, data_format="channels_first", padding='SAME')(input_layer)
     x = Conv3D(filters=32, kernel_size=3,
-               data_format="channels_first", activation="relu")(x)
-    x = MaxPooling3D(2, 2, data_format="channels_first")(x)
+               data_format="channels_first", activation="relu", padding='SAME')(x)
+    x = MaxPooling3D(2, 2, data_format="channels_first", padding='SAME')(x)
     x = Conv3D(filters=64, kernel_size=3,
-               data_format="channels_first", activation="relu")(x)
-    x = MaxPooling3D(2, 2, data_format="channels_first")(x)
+               data_format="channels_first", activation="relu", padding='SAME')(x)
+    x = MaxPooling3D(2, 2, data_format="channels_first", padding='SAME')(x)
     x = Conv3D(filters=128, kernel_size=3,
-               data_format="channels_first", activation="relu")(x)
+               data_format="channels_first", activation="relu", padding='SAME')(x)
 
     # Final layer
     x = Flatten(data_format="channels_first")(x)
@@ -42,7 +42,26 @@ def define_baseline_model(dims):
     # Compile and return model
     model = keras.models.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.SGD(
-        lr=0.003), loss="sparse_categorical_crossentropy")
+        lr=0.01, momentum=0.9), loss="sparse_categorical_crossentropy")
+
+    return model
+
+def _define_baseline_model(dims):
+    input_layer = keras.layers.Input(shape=dims)
+    pool0 = keras.layers.MaxPooling3D(data_format="channels_first")(input_layer)
+    conv1 = keras.layers.Conv3D(filters=32, kernel_size=3, data_format="channels_first", activation="relu")(pool0)
+    pool1 = keras.layers.MaxPooling3D(data_format="channels_first")(conv1)
+    conv2 = keras.layers.Conv3D(filters=64, kernel_size=3, data_format="channels_first", activation="relu")(pool1)
+    pool2 = keras.layers.MaxPooling3D(data_format="channels_first")(conv2)
+    conv3 = keras.layers.Conv3D(filters=128, kernel_size=3, data_format="channels_first", activation="relu")(pool2)
+
+    flatten = keras.layers.Flatten(data_format="channels_first")(conv3)
+
+    fc1 = keras.layers.Dense(2,activation='softmax')(flatten)
+
+    # Define and return model
+    model = keras.models.Model(inputs=input_layer, outputs=fc1)
+    model.compile(optimizer=keras.optimizers.SGD(lr=0.01, momentum=0.9), loss="sparse_categorical_crossentropy")
 
     return model
 
@@ -75,7 +94,7 @@ def define_densefs_model(dims):
     # Compile and return model
     model = keras.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.Adadelta(
-        lr=0.003), loss='sparse_categorical_crossentropy')
+        lr=0.01), loss='sparse_categorical_crossentropy')
     return model
 
 
