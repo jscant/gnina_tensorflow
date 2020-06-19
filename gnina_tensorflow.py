@@ -4,10 +4,9 @@ Created on Tue Jun 16 19:46:06 2020
 
 @author: scantleb
 @brief: Main script for training and inference with gnina-based neural
-networks (https://github.com/gnina/gnina).
+networks (https://github.com/gnina/gnina) .
 
 Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.x
-
 """
 
 import argparse
@@ -79,7 +78,7 @@ def get_test_info(test_file):
         test_file: text file containing labels and paths to gninatypes files
         
     Returns:
-        tuple containing dictionary with the format:
+        dictionary containing tuples with the format:
             {index : (receptor_path, ligand_path)}
             where index is the line number, receptor_path is the path to the
             receptor gninatype and ligand_path is the path to the ligand

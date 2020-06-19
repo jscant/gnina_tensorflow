@@ -4,9 +4,19 @@
 Created on Tue Jun 16 19:46:06 2020
 
 @author: scantleb
-@brief: Baseline and DenseFS models. Densenet components modified from original
-tensorflow implementation found at
-https://github.com/keras-team/keras-applications/blob/master/keras_applications/densenet.py
+@brief: Baseline and DenseFS models.
+
+Baseline (gnina; Ragoza et al., 2017) is the name we have given to the simpler
+original CNN built on top of the gnina framework. [1]
+
+DenseFS (Imrie et al., 2018) is a more advanced neural network built on top of
+the gnina framework. [2]
+
+DenseNet components modified original tensorflow implementation. [3]
+
+[1] https://pubs.acs.org/doi/10.1021/acs.jcim.8b00350
+[2] https://pubs.acs.org/doi/abs/10.1021/acs.jcim.6b00740
+[3] https://github.com/tensorflow/tensorflow
 """
 
 import tensorflow as tf
