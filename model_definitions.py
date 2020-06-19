@@ -17,6 +17,7 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, MaxPooling3D,
 
 def define_baseline_model(dims):
     """DenseFS network.
+    
     Arguments:
         dims: tuple with input dimensions.
     Returns:
@@ -50,6 +51,7 @@ def define_baseline_model(dims):
 
 def define_densefs_model(dims):
     """DenseFS network.
+    
     Arguments:
         dims: tuple with input dimensions.
     Returns:

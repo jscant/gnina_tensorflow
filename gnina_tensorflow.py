@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Spyder Editor
+Created on Tue Jun 16 19:46:06 2020
 
-This is a temporary script file.
+@author: scantleb
+@brief: Main script for training and inference with gnina-based neural
+networks (https://github.com/gnina/gnina).
+
+Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.x
+
 """
 
 import argparse
@@ -21,6 +26,18 @@ import matplotlib.pyplot as plt
 
 
 class Timer:
+    """
+    Simple timer class.
+    
+    To time a block of code, wrap it like so:
+        
+        with Timer() as t:
+            <some_code>
+        total_time = t.interval
+        
+    The time taken for the code to execute is stored in t.interval.
+    """
+    
     def __enter__(self):
         self.start = time.time()
         return self
@@ -31,6 +48,14 @@ class Timer:
 
 
 def beautify_config(config, fname=None):
+    """
+    Formats dictionary into two columns, sorted in alphabetical order.
+    
+    Arguments:
+        config: any dictionary
+        fname: string containing valid path to filename for writing beautified
+            config to. If left blank, output will be printed to stdout.
+    """
     output = 'Time of experiment generation: {:%d-%m-%Y %H:%M:%S}\n\n'.format(
         datetime.datetime.now())
     sorted_config = sorted([(arg, value)
@@ -46,16 +71,45 @@ def beautify_config(config, fname=None):
         print(output)
 
 
-def get_test_info(ep, test_path):
-    size = ep.size()
+def get_test_info(test_file):
+    """
+    Obtains information about gninatypes file.
+    
+    Arguments:
+        test_file: text file containing labels and paths to gninatypes files
+        
+    Returns:
+        tuple containing dictionary with the format:
+            {index : (receptor_path, ligand_path)}
+            where index is the line number, receptor_path is the path to the
+            receptor gninatype and ligand_path is the path to the ligand
+            gninatype.
+    """
     paths = {}
-    with open(test_path, 'r') as f:
+    with open(test_file, 'r') as f:
         for idx, line in enumerate(f.readlines()):
             chunks = line.strip().split()
             paths[idx] = (chunks[-2], chunks[-1])
-    return paths, size
+    return paths, len(paths)
 
 
+def process_batch(model, example_provider, gmaker, input_tensor,
+                  labels_tensor=None, train=True):
+    if train and labels_tensor is None:
+        raise RuntimeError('Labels must be provided for backpropagation',
+                           'if train == True')
+    batch = example_provider.next_batch(input_tensor.shape[0])
+    gmaker.forward(batch, input_tensor, 0, random_rotation=True)
+    batch.extract_label(0, labels_tensor) # y_true
+    if train:
+        return model.train_on_batch(
+            input_tensor.tonumpy(), labels_tensor.tonumpy())
+    else:
+        return (labels_tensor.tonumpy(),
+                model.predict_on_batch(input_tensor.tonumpy()))
+
+
+# Create and parse command line args
 parser = argparse.ArgumentParser()
 parser.add_argument("data_root", type=str)
 parser.add_argument("train", type=str)
@@ -70,7 +124,6 @@ parser.add_argument(
 args = parser.parse_args()
 
 config_args = {}
-
 data_root = os.path.abspath(args.data_root) if args.data_root != 'None' else ''
 train_types = os.path.abspath(args.train)
 test_types = args.test
@@ -81,10 +134,11 @@ savepath = os.path.abspath(
     os.path.join(args.save_path, ['baseline', 'densefs'][use_densefs],
                  str(int(time.time()))))
 
-# for fname in [train_types, test_types]:
-#    if not os.path.isfile(fname):
-#        raise RuntimeError('{} does not exist.'.format(fname))
+for fname in [train_types, test_types]: # Check if types files exist
+   if not os.path.isfile(fname):
+       raise RuntimeError('{} does not exist.'.format(fname))
 
+# Create config dict for saving to disk later
 config_args['data_root'] = data_root
 config_args['train'] = train_types
 config_args['test'] = test_types
@@ -92,11 +146,11 @@ config_args['model'] = ['baseline', 'densefs'][use_densefs]
 config_args['batch_size'] = batch_size
 config_args['iterations'] = iterations
 config_args['save_path'] = savepath
-
 beautify_config(config_args)
 
-gap = 100
+gap = 100 # Window to average training loss over (in batches)
 
+# Setup libmolgrid to feed Examples into tensorflow objects
 e = molgrid.ExampleProvider(data_root=data_root, balanced=True, shuffle=True)
 e.populate(train_types)
 
@@ -109,34 +163,35 @@ input_tensor = molgrid.MGrid5f(*tensor_shape)
 
 pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
 
+# We are ready to define our model and train
 losses = []
 model = define_densefs_model(
     dims) if use_densefs else define_baseline_model(dims)
 model_str = ['Baseline', 'DenseFS'][use_densefs]
-print('Using {0} for {1} iterations'.format(model_str, iterations))
 plot_model(model, os.path.join(savepath, 'model.png'),
            show_shapes=True)
+beautify_config(config_args, os.path.join(savepath, 'config'))
 model.summary()
 
 losses_string = ''
 for iteration in range(iterations):
-    batch = e.next_batch(batch_size)
-    gmaker.forward(batch, input_tensor, 0, random_rotation=True)
-    batch.extract_label(0, labels)
-    loss = model.train_on_batch(
-        input_tensor.tonumpy(), labels.tonumpy())
+    
+    # Data: e > gmaker > input_tensor > network (forward and backward pass)
+    loss = process_batch(model, e, gmaker, input_tensor, labels,
+                         train=True)
+    
+    # Save losses to disk
     losses.append(float(loss))
-
     losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
     with open(os.path.join(savepath, 'loss_history_{}.txt'.format(
             model_str.lower())), 'w') as f:
         f.write(losses_string)
-
     print(iteration, 'loss: {0:0.3f}'.format(loss))
 
-beautify_config(config_args, os.path.join(savepath, 'config'))
+# Save model for later inference
 model.save(savepath)
 
+# Plot losses using moving window of <gap> batches
 losses = [np.mean(losses[window:window + gap])
           for window in np.arange(0, iterations, step=gap)]
 plt.plot(np.arange(0, iterations, gap), losses)
@@ -145,42 +200,57 @@ plt.title('Cross-entropy loss history for DenseFS network'.format(model_str))
 plt.savefig(os.path.join(savepath, 'densefs_loss.png'))
 print('Finished {}\n\n'.format(model_str))
 
+# Perform inference if test types file is provided
 if test_types is not None:
+    
+    # Setup molgrid.ExampleProvider and GridMaker to feed into network
     e_test = molgrid.ExampleProvider(
         data_root=data_root, balanced=False, shuffle=False)
     e_test.populate(test_types)
-    paths, size = get_test_info(e_test, test_types)
-    s = ''
+    
+    paths, size = get_test_info(test_types) # For indexing in output
+    test_output_string = ''
+    
     with Timer() as t:
         for iteration in range(size // batch_size):
-            batch = e_test.next_batch(batch_size)
-            gmaker.forward(batch, input_tensor, 0, random_rotation=False)
-            batch.extract_label(0, labels)
-            labels_numpy = labels.tonumpy()
-            predictions = model.predict_on_batch(
-                input_tensor.tonumpy())
+            labels_numpy, predictions = process_batch(model, e_test, gmaker,
+                                                      input_tensor,
+                                                      labels_tensor=labels,
+                                                      train=False)
             for i in range(batch_size):
                 index = iteration*batch_size + i
-                s += '{0} | {1:0.3f} {2} {3}\n'.format(
-                    int(labels_numpy[i]), predictions[i][1], paths[index][0], paths[index][1])
+                test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
+                    int(labels_numpy[i]),
+                    predictions[i][1],
+                    paths[index][0],
+                    paths[index][1]
+                )
 
+        # Because we will have some number > batch_size remaining
         final_batch_size = size % batch_size
         final_tensor_shape = (final_batch_size,) + dims
 
-        batch = e_test.next_batch(final_batch_size)
         final_labels = molgrid.MGrid1f(final_batch_size)
         final_input_tensor = molgrid.MGrid5f(*final_tensor_shape)
 
-        gmaker.forward(batch, final_input_tensor, 0, random_rotation=False)
-        batch.extract_label(0, final_labels)
-        labels_numpy = final_labels.tonumpy()
-        predictions = model.predict_on_batch(final_input_tensor.tonumpy())
+        labels_numpy, predictions = process_batch(model, e_test, gmaker,
+                                                  final_input_tensor,
+                                                  labels_tensor=final_labels,
+                                                  train=False)
+        
         for i in range(final_batch_size):
             index = iteration*batch_size + i
-            s += '{0} | {1:0.3f} {2} {3}\n'.format(
-                int(labels_numpy[i]), predictions[i][1], paths[index][0], paths[index][1])
+            test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
+                int(labels_numpy[i]),
+                predictions[i][1],
+                paths[index][0],
+                paths[index][1]
+            )
 
     print('Total inference time ({}):'.format(model_str), t.interval, 's')
+    
+    # Save predictions to disk
     with open(os.path.join(savepath, 'predictions_{}.txt'.format(
             model_str.lower())), 'w') as f:
-        f.write(s[:-1])
+        f.write(test_output_string[:-1])
+        
