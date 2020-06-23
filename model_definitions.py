@@ -22,12 +22,13 @@ DenseNet components modified original tensorflow implementation. [3]
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras import backend
-from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, MaxPooling3D, BatchNormalization, Concatenate, GlobalMaxPooling3D
+from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense,\
+    MaxPooling3D, BatchNormalization, Concatenate, GlobalMaxPooling3D
 
 
 def define_baseline_model(dims):
     """DenseFS network.
-    
+
     Arguments:
         dims: tuple with input dimensions.
     Returns:
@@ -38,14 +39,17 @@ def define_baseline_model(dims):
     # Hidden layers
     x = MaxPooling3D(2, 2, data_format="channels_first",
                      padding='SAME')(input_layer)
-    x = Conv3D(filters=32, kernel_size=3,
-               data_format="channels_first", activation="relu", padding='SAME')(x)
+
+    x = Conv3D(filters=32, kernel_size=3, data_format="channels_first",
+               activation="relu", padding='SAME')(x)
     x = MaxPooling3D(2, 2, data_format="channels_first", padding='SAME')(x)
-    x = Conv3D(filters=64, kernel_size=3,
-               data_format="channels_first", activation="relu", padding='SAME')(x)
+
+    x = Conv3D(filters=64, kernel_size=3, data_format="channels_first",
+               activation="relu", padding='SAME')(x)
     x = MaxPooling3D(2, 2, data_format="channels_first", padding='SAME')(x)
-    x = Conv3D(filters=128, kernel_size=3,
-               data_format="channels_first", activation="relu", padding='SAME')(x)
+
+    x = Conv3D(filters=128, kernel_size=3, data_format="channels_first",
+               activation="relu", padding='SAME')(x)
 
     # Final layer
     x = Flatten(data_format="channels_first")(x)
@@ -61,7 +65,7 @@ def define_baseline_model(dims):
 
 def define_densefs_model(dims):
     """DenseFS network.
-    
+
     Arguments:
         dims: tuple with input dimensions.
     Returns:
@@ -74,10 +78,15 @@ def define_densefs_model(dims):
                      padding='SAME', data_format='channels_first')(input_layer)
     x = Conv3D(32, 3, activation='relu', padding='SAME', use_bias=False,
                data_format='channels_first')(x)
+
     x = dense_block(x, 4, "db_1")
     x = transition_block(x, 1.0, "tb_1")
+
     x = dense_block(x, 4, "db_2")
     x = transition_block(x, 1.0, "tb_2")
+
+    # Final transition block has global pooling instead of local and no
+    # convolution [2]
     x = dense_block(x, 4, "db_3")
     x = transition_block(x, 1.0, "tb_3", final=True)
     x = GlobalMaxPooling3D(data_format='channels_first')(x)
