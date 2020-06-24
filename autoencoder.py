@@ -57,9 +57,7 @@ class AutoEncoder(tf.keras.Model):
             inputs=input_image,
             outputs=[reconstruction, encoding]
         )
-        #self.compile(loss=[self.root_relative_squared_error, None],
-        #             optimizer=tf.keras.optimizers.SGD())
-        self.compile(loss=['mean_absolute_percentage_error', None],
+        self.compile(loss=[self.root_relative_squared_error, None],
                      optimizer=tf.keras.optimizers.SGD())
 
     def get_encodings(self, input_tensor):
