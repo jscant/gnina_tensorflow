@@ -145,7 +145,8 @@ def process_batch(model, example_provider, gmaker, input_tensor,
 def main():
     # Create and parse command line args
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", type=str, required=False, default='')
+    parser.add_argument("--data_root", type=str, required=False,
+                        default=pathlib.Path.home())
     parser.add_argument("--train", type=str, required=False)
     parser.add_argument('--test', type=str, required=False)
     parser.add_argument('--densefs', '-d', action='store_true')
@@ -156,6 +157,17 @@ def main():
     parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
     args = parser.parse_args()
+
+    # We need to train or test
+    if not (args.train or args.test):
+        raise RuntimeError('Please specify at least one of --train or '
+                           '--test')
+    else:
+        # Check if types files exist
+        for fname in [types for types in [args.train, args.test]
+                      if types is not None]:
+            if not os.path.isfile(fname):
+                raise RuntimeError('{} does not exist.'.format(fname))
 
     config_args = {}
 
@@ -168,17 +180,6 @@ def main():
     savepath = os.path.abspath(
         os.path.join(args.save_path, ['baseline', 'densefs'][use_densefs],
                      str(int(time.time()))))
-
-    # We need to train or test
-    if not (train_types or test_types):
-        raise RuntimeError('Please specify at least one of train_types or'
-                           'test_types')
-    else:
-        # Check if types files exist
-        for fname in [types for types in [train_types, test_types]
-                      if types is not None]:
-            if not os.path.isfile(fname):
-                raise RuntimeError('{} does not exist.'.format(fname))
 
     # Create config dict for saving to disk later
     config_args['data_root'] = data_root
