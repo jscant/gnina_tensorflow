@@ -129,6 +129,7 @@ def main():
     train_types = os.path.abspath(args.train)
     batch_size = args.batch_size
     iterations = args.iterations
+    encoding_size = args.encoding_size
     savepath = os.path.abspath(
         os.path.join(args.save_path, str(int(time.time()))))
     pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
@@ -145,23 +146,21 @@ def main():
 
     # Train autoencoder
     losses = []
-    ae = AutoEncoder(dims)
+    ae = AutoEncoder(dims, encoding_size=encoding_size)
+    ae.summary()
+    
+    print('Starting training cycle...')
     for iteration in range(iterations):
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=True)
-
         loss = ae.train_on_batch(
             input_tensor.tonumpy(),
-            {'reconstruction': input_tensor.tonumpy()})[0]
-        losses.append(loss)
-        if not iteration % 100:
-            print(iteration, ':', loss)
-
-    # Save encodings in serialised format
-    serialised_encodings = calculate_embeddings(ae, data_root, train_types)
-    with open(os.path.join(savepath, 'serialised_encodings.bin'), 'wb') as f:
-        f.write(serialised_encodings)
-
+            {'reconstruction': input_tensor.tonumpy()},
+            return_dict=True)
+        print('mse:', loss['loss'], 'relative_mse:', loss['reconstruction_root_relative_squared_error'])
+        losses.append(loss['loss'])
+    print('Finished training.')
+    
     # Plot loss
     gap = 100
     losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
@@ -170,6 +169,14 @@ def main():
     plt.ylabel('Loss')
     plt.savefig(os.path.join(savepath, 'loss.png'))
 
+    # Save encodings in serialised format
+    print('Saving encodings...')
+    serialised_encodings = calculate_embeddings(ae, data_root, train_types)
+    with open(os.path.join(savepath, 'serialised_encodings.bin'), 'wb') as f:
+        f.write(serialised_encodings)
+
+    
+
 
 if __name__ == '__main__':
-    main()
+    x, bins = main()

@@ -13,7 +13,7 @@ dimensional space, as well as the inverse.
 
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, MaxPooling3D,\
-    Reshape, Conv3DTranspose, UpSampling3D
+    Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 from operator import mul
 from functools import reduce
 
@@ -24,12 +24,21 @@ class AutoEncoder(tf.keras.Model):
         input_image = Input(shape=dims, dtype=tf.float32, name='input')
         x = Conv3D(16, 3, padding='SAME', activation='relu',
                    data_format='channels_first')(input_image)
+        x = BatchNormalization(
+            axis=4, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = MaxPooling3D(2, 2, data_format='channels_first')(x)
         x = Conv3D(32, 3, padding='SAME', activation='relu',
                    data_format='channels_first')(x)
+        x = BatchNormalization(
+            axis=4, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = MaxPooling3D(2, 2, data_format='channels_first')(x)
         x = Conv3D(32, 3, padding='SAME', activation='relu',
                    data_format='channels_first')(x)
+        x = BatchNormalization(
+            axis=4, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = MaxPooling3D(2, 2, data_format='channels_first')(x)
         final_shape = x.shape
         flattened = Flatten(data_format='channels_first')(x)
@@ -41,12 +50,17 @@ class AutoEncoder(tf.keras.Model):
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(reshaped)
         x = Conv3DTranspose(32, 3, padding='SAME', activation='relu',
-                            data_format='channels_first')(
-            x)
+                            data_format='channels_first')(x)
+        x = BatchNormalization(
+            axis=4, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(x)
         x = Conv3DTranspose(16, 3, padding='SAME', activation='relu',
                             data_format='channels_first')(x)
+        x = BatchNormalization(
+            axis=4, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(x)
         reconstruction = Conv3DTranspose(28, 3, padding='SAME', activation='relu',
@@ -57,8 +71,11 @@ class AutoEncoder(tf.keras.Model):
             inputs=input_image,
             outputs=[reconstruction, encoding]
         )
-        self.compile(loss=[self.root_relative_squared_error, None],
-                     optimizer=tf.keras.optimizers.SGD())
+        self.compile(
+            optimizer=tf.keras.optimizers.SGD(lr=0.1, momentum=0.9),
+            loss={'reconstruction': 'mse'},
+            metrics={'reconstruction': self.root_relative_squared_error}
+        )
 
     def get_encodings(self, input_tensor):
         _, encoding = self.predict(input_tensor)
