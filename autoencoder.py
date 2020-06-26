@@ -21,6 +21,7 @@ from functools import reduce
 class AutoEncoder(tf.keras.Model):
 
     def __init__(self, dims, encoding_size=10):
+        """Setup for autoencoder architecture."""
         input_image = Input(shape=dims, dtype=tf.float32, name='input')
         x = Conv3D(16, 3, padding='SAME', activation='relu',
                    data_format='channels_first')(input_image)
@@ -63,41 +64,80 @@ class AutoEncoder(tf.keras.Model):
             moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(x)
-        reconstruction = Conv3DTranspose(28, 3, padding='SAME', activation='relu',
+        reconstruction = Conv3DTranspose(28, 3, padding='SAME',
+                                         activation='relu',
                                          data_format='channels_first',
                                          name='reconstruction')(x)
+        
+        frac = Input(shape=(1,), dtype=tf.float32)
 
         super(AutoEncoder, self).__init__(
-            inputs=input_image,
+            inputs=[input_image, frac],
             outputs=[reconstruction, encoding]
         )
+        self.add_loss(self.composite_mse(input_image, reconstruction, frac))
         self.compile(
             optimizer=tf.keras.optimizers.SGD(lr=0.1, momentum=0.9),
-            #optimizer=tf.keras.optimizers.Adadelta(lr=0.1),
-            loss={'reconstruction': 'mse'},
-            metrics={'reconstruction': self.nonzero_mse}
+            metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
         )
 
-    def get_encodings(self, input_tensor):
-        _, encoding = self.predict(input_tensor)
-        return encoding
-
-    def get_reconstruction(self, input_tensor):
-        reconstruction, _ = self.predict(input_tensor)
-        return reconstruction
-
-    def root_relative_squared_error(self, target, reconstruction):
-        diff = tf.math.squared_difference(target, reconstruction)
-        numerator = tf.math.reduce_sum(diff)
-        mean = tf.reduce_mean(target)
-        dumb_diff = tf.math.squared_difference(target, mean)
-        denominator = tf.math.reduce_sum(dumb_diff)
-        return tf.sqrt(tf.divide(numerator, denominator))
-    
     def nonzero_mse(self, target, reconstruction):
+        """Mean squared error for non-zero values in the target matrix
+        
+        Finds the mean squared error for all parts of the input tensor which
+        are not equal to zero.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Mean squared error for all non-zero entries in the target
+        """
         mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
         masked_difference = (target - reconstruction) * mask
         squared_difference = tf.reduce_sum(tf.square(masked_difference))
         divided_sd = tf.divide(squared_difference, tf.reduce_sum(mask))
         return tf.sqrt(divided_sd)
+    
+    def zero_mse(self, target, reconstruction):
+        """Mean squared error for zero values in the target matrix
         
+        Finds the mean squared error for all parts of the input tensor which
+        are equal to zero.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Mean squared error for all zero entries in the target
+        """
+        mask = tf.cast(tf.equal(target, 0), tf.float32)
+        masked_difference = (target - reconstruction) * mask
+        squared_difference = tf.reduce_sum(tf.square(masked_difference))
+        divided_sd = tf.divide(squared_difference, tf.reduce_sum(mask))
+        return tf.sqrt(divided_sd)
+    
+    def composite_mse(self, target, reconstruction, ratio):
+        """Weighted mean squared error of nonzero-only and zero-only inputs.
+        
+        Finds the MSE between the autoencoder reconstruction and the nonzero
+        entries of the input, the MSE between the reconstruction and the zero
+        entries of the input and gives the weighted average of the two.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            ratio: desired ratio of nonzero : zero
+            
+        Returns:
+            Average weighted by:
+                
+                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
+                
+            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
+            parts of target respectively.
+        """
+        frac = ratio/(1+ratio)
+        return frac*self.nonzero_mse(target, reconstruction) + (1-frac)*self.zero_mse(target, reconstruction)

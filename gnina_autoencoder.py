@@ -14,6 +14,7 @@ import numpy as np
 import os
 import pathlib
 import time
+import tensorflow as tf
 
 from autoencoder import AutoEncoder
 from collections import defaultdict, deque
@@ -21,17 +22,19 @@ from matplotlib import pyplot as plt
 
 
 def scatter(img, channel=None):
+    """Scatter plot with markersize proportional to matrix entry."""
     if channel is not None:
         img = img[channel, :, :, :]
     img = img.squeeze()
-    xlin, ylin, zlin = np.arange(-11.5, 12.5, 0.5), np.arange(-11.5, 12.5, 0.5), np.arange(-11.5, 12.5, 0.5)
+    xlin, ylin, zlin = tuple([np.arange(-11.5, 12.5, 0.5)])*3
     x, y, z = np.meshgrid(xlin, ylin, zlin)
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x,y,z, s=img)
+    ax.scatter(x, y, z, s=img)
 
 
-def calculate_embeddings(encoder, input_tensor, data_root, types_file, rotate=False):
+def calculate_embeddings(encoder, input_tensor, data_root, types_file,
+                         rotate=False):
     """Calculates encodings for gnina inputs.
 
     Uses trained AutoEncoder object to calculate the embeddings of all gnina
@@ -60,12 +63,11 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file, rotate=Fa
         return paths
 
     # Setup for gnina
-    batch_size = 16  # This doesn't really matter (aside from speed)
+    batch_size = input_tensor.shape[0]
     e = molgrid.ExampleProvider(data_root=data_root, balanced=False,
                                 shuffle=False)
     e.populate(types_file)
     gmaker = molgrid.GridMaker()
-    dims = gmaker.grid_dimensions(e.num_types())
 
     # Need a dictionary mapping {rec : deque([(idx, lig), ...])} where idx
     # is the position of the receptor/ligand pair in the types file
@@ -114,7 +116,6 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file, rotate=Fa
 
 def main():
     # Parse and sanitise command line args
-    molgrid.set_gpu_enabled(False)
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
@@ -133,7 +134,7 @@ def main():
 
     if not os.path.isfile(args.train):
         raise RuntimeError('{} does not exist.'.format(args.train))
-        
+
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
     print(arg_str)
@@ -149,7 +150,7 @@ def main():
     pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
     pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
         parents=True, exist_ok=True)
-    
+
     with open(os.path.join(savepath, 'config'), 'w') as f:
         f.write(arg_str)
 
@@ -164,11 +165,12 @@ def main():
     input_tensor = molgrid.MGrid5f(*tensor_shape)
 
     # Train autoencoder
-    losses = []
+    zero_losses, nonzero_losses, losses = [], [], []
     ae = AutoEncoder(dims, encoding_size=encoding_size)
     ae.summary()
-    
+
     print('Starting training cycle...')
+    loss_ratio = 0.5
     for iteration in range(iterations):
         if iteration == iterations - 1:
             checkpoint_path = os.path.join(
@@ -183,29 +185,53 @@ def main():
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=True)
         loss = ae.train_on_batch(
-            input_tensor.tonumpy(),
+            [input_tensor.tonumpy(), tf.constant(loss_ratio, shape=(1,))],
             {'reconstruction': input_tensor.tonumpy()},
             return_dict=True)
-        print('mse:', loss['loss'], 'relative_mse:', loss['reconstruction_nonzero_mse'])
+        zero_mse = loss['reconstruction_zero_mse']
+        nonzero_mse = loss['reconstruction_nonzero_mse']
+        loss_ratio = nonzero_mse / zero_mse
+        print('{0:0.3f}\t{1:0.3f}\t{2:0.3f}'.format(loss['loss'], nonzero_mse,
+                                                    zero_mse))
+        zero_losses.append(zero_mse)
+        nonzero_losses.append(nonzero_mse)
         losses.append(loss['loss'])
     print('Finished training.')
+
+    # Plot zero, nonzero mse
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel('Batches')
+    ax2 = ax1.twinx()
+    axes = [ax1, ax2]
+    for idx, losses in enumerate([zero_losses, nonzero_losses]):
+        gap = 100
+        losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
+        axes[idx].plot(np.arange(len(losses))*gap, losses)
+        axes[idx].set_ylabel('Loss')
+    ax1.legend(['zero_mse'])
+    ax2.legend(['nonzero_mse'])
+    fig.savefig(os.path.join(savepath, 'zero_nonzero_losses.png'))
     
-    # Plot loss
-    gap = 100
-    losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
-    plt.plot(np.arange(len(losses))*gap, losses)
-    plt.xlabel('Batches')
-    plt.ylabel('Loss')
-    plt.savefig(os.path.join(savepath, 'loss.png'))
+    # Plot composite mse
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel('Batches')
+    axes = [ax1]
+    for idx, losses in enumerate([losses]):
+        gap = 100
+        losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
+        axes[idx].plot(np.arange(len(losses))*gap, losses)
+        axes[idx].set_ylabel('Loss')
+    ax1.legend(['composite_mse'])
+    fig.savefig(os.path.join(savepath, 'composite_loss.png'))
+        
 
     # Save encodings in serialised format
     print('Saving encodings...')
-    serialised_encodings = calculate_embeddings(ae, input_tensor, data_root, train_types)
+    serialised_encodings = calculate_embeddings(
+        ae, input_tensor, data_root, train_types)
     with open(os.path.join(savepath, 'serialised_encodings.bin'), 'wb') as f:
         f.write(serialised_encodings)
 
-    
-
 
 if __name__ == '__main__':
-    x, bins = main()
+    main()
