@@ -20,7 +20,18 @@ from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 
 
-def calculate_embeddings(encoder, data_root, types_file, rotate=False):
+def scatter(img, channel=None):
+    if channel is not None:
+        img = img[channel, :, :, :]
+    img = img.squeeze()
+    xlin, ylin, zlin = np.arange(-11.5, 12.5, 0.5), np.arange(-11.5, 12.5, 0.5), np.arange(-11.5, 12.5, 0.5)
+    x, y, z = np.meshgrid(xlin, ylin, zlin)
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(x,y,z, s=img)
+
+
+def calculate_embeddings(encoder, input_tensor, data_root, types_file, rotate=False):
     """Calculates encodings for gnina inputs.
 
     Uses trained AutoEncoder object to calculate the embeddings of all gnina
@@ -55,8 +66,6 @@ def calculate_embeddings(encoder, data_root, types_file, rotate=False):
     e.populate(types_file)
     gmaker = molgrid.GridMaker()
     dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (batch_size,) + dims
-    input_tensor = molgrid.MGrid5f(*tensor_shape)
 
     # Need a dictionary mapping {rec : deque([(idx, lig), ...])} where idx
     # is the position of the receptor/ligand pair in the types file
@@ -78,12 +87,9 @@ def calculate_embeddings(encoder, data_root, types_file, rotate=False):
             embeddings[global_idx] = encodings[batch_idx]
 
     remainder = size % batch_size
-    remainder_tensor_shape = (remainder,) + dims
-    remainder_input_tensor = molgrid.MGrid5f(*remainder_tensor_shape)
-
-    batch = e.next_batch(remainder)
-    gmaker.forward(batch, remainder_input_tensor, 0, random_rotation=rotate)
-    _, encodings = encoder.predict_on_batch(remainder_input_tensor.tonumpy())
+    batch = e.next_batch(batch_size)
+    gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
+    _, encodings = encoder.predict_on_batch(input_tensor.tonumpy())
 
     for batch_idx in range(remainder):
         global_idx = iterations * batch_size + batch_idx
@@ -108,6 +114,7 @@ def calculate_embeddings(encoder, data_root, types_file, rotate=False):
 
 def main():
     # Parse and sanitise command line args
+    molgrid.set_gpu_enabled(False)
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
@@ -117,6 +124,8 @@ def main():
     parser.add_argument(
         '--iterations', '-i', type=int, required=False, default=25000)
     parser.add_argument(
+        '--save_interval', type=int, required=False, default=10000)
+    parser.add_argument(
         '--batch_size', '-b', type=int, required=False, default=16)
     parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
@@ -124,15 +133,25 @@ def main():
 
     if not os.path.isfile(args.train):
         raise RuntimeError('{} does not exist.'.format(args.train))
+        
+    arg_str = '\n'.join(
+        ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
+    print(arg_str)
 
     data_root = os.path.abspath(args.data_root) if len(args.data_root) else ''
     train_types = os.path.abspath(args.train)
     batch_size = args.batch_size
     iterations = args.iterations
+    save_interval = args.save_interval
     encoding_size = args.encoding_size
     savepath = os.path.abspath(
         os.path.join(args.save_path, str(int(time.time()))))
     pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
+        parents=True, exist_ok=True)
+    
+    with open(os.path.join(savepath, 'config'), 'w') as f:
+        f.write(arg_str)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
@@ -151,13 +170,23 @@ def main():
     
     print('Starting training cycle...')
     for iteration in range(iterations):
+        if iteration == iterations - 1:
+            checkpoint_path = os.path.join(
+                savepath, 'checkpoints', 'final_model_{}'.format(
+                    iteration + 1))
+            ae.save_weights(os.path.join(checkpoint_path, 'data'))
+        elif not (iteration + 1) % save_interval:
+            checkpoint_path = os.path.join(
+                savepath, 'checkpoints', 'ckpt_model_{}'.format(
+                    iteration + 1))
+            ae.save_weights(os.path.join(checkpoint_path, 'data'))
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=True)
         loss = ae.train_on_batch(
             input_tensor.tonumpy(),
             {'reconstruction': input_tensor.tonumpy()},
             return_dict=True)
-        print('mse:', loss['loss'], 'relative_mse:', loss['reconstruction_root_relative_squared_error'])
+        print('mse:', loss['loss'], 'relative_mse:', loss['reconstruction_nonzero_mse'])
         losses.append(loss['loss'])
     print('Finished training.')
     
@@ -171,7 +200,7 @@ def main():
 
     # Save encodings in serialised format
     print('Saving encodings...')
-    serialised_encodings = calculate_embeddings(ae, data_root, train_types)
+    serialised_encodings = calculate_embeddings(ae, input_tensor, data_root, train_types)
     with open(os.path.join(savepath, 'serialised_encodings.bin'), 'wb') as f:
         f.write(serialised_encodings)
 

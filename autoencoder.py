@@ -73,8 +73,9 @@ class AutoEncoder(tf.keras.Model):
         )
         self.compile(
             optimizer=tf.keras.optimizers.SGD(lr=0.1, momentum=0.9),
+            #optimizer=tf.keras.optimizers.Adadelta(lr=0.1),
             loss={'reconstruction': 'mse'},
-            metrics={'reconstruction': self.root_relative_squared_error}
+            metrics={'reconstruction': self.nonzero_mse}
         )
 
     def get_encodings(self, input_tensor):
@@ -92,3 +93,11 @@ class AutoEncoder(tf.keras.Model):
         dumb_diff = tf.math.squared_difference(target, mean)
         denominator = tf.math.reduce_sum(dumb_diff)
         return tf.sqrt(tf.divide(numerator, denominator))
+    
+    def nonzero_mse(self, target, reconstruction):
+        mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
+        masked_difference = (target - reconstruction) * mask
+        squared_difference = tf.reduce_sum(tf.square(masked_difference))
+        divided_sd = tf.divide(squared_difference, tf.reduce_sum(mask))
+        return tf.sqrt(divided_sd)
+        
