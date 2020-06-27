@@ -66,7 +66,7 @@ class AutoEncoder(tf.keras.Model):
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(x)
         reconstruction = Conv3DTranspose(28, 3, padding='SAME',
-                                         activation='relu',
+                                         activation='sigmoid',
                                          data_format='channels_first',
                                          name='reconstruction')(x)
         

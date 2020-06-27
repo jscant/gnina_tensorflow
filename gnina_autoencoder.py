@@ -195,7 +195,7 @@ def main():
     ae = AutoEncoder(dims, encoding_size=encoding_size, optimiser=optimiser,
                      lr=lr, momentum=momentum)
     ae.summary()
-
+    
     loss_log = 'Iteration Composite Nonzero Zero\n'
     print('Starting training cycle...')
     loss_ratio = 0.5
@@ -213,8 +213,8 @@ def main():
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=True)
         loss = ae.train_on_batch(
-            [input_tensor.tonumpy(), tf.constant(loss_ratio, shape=(1,))],
-            {'reconstruction': input_tensor.tonumpy()},
+            [input_tensor.tonumpy()/3, tf.constant(loss_ratio, shape=(1,))],
+            {'reconstruction': input_tensor.tonumpy()/3},
             return_dict=True)
         zero_mse = loss['reconstruction_zero_mse']
         nonzero_mse = loss['reconstruction_nonzero_mse']
@@ -229,7 +229,7 @@ def main():
         print(loss_str)
         loss_log += loss_str
         if not iteration % 2000:
-            with open(os.path.join(savepath, 'loss_log'), 'r') as f:
+            with open(os.path.join(savepath, 'loss_log'), 'w') as f:
                 f.write(loss_log[:-1])
         
         zero_losses.append(zero_mse)
