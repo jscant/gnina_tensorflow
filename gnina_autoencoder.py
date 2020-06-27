@@ -129,15 +129,27 @@ def main():
     parser.add_argument(
         '--batch_size', '-b', type=int, required=False, default=16)
     parser.add_argument(
+        '--optimiser', '-o', type=str, required=False, default='sgd')
+    parser.add_argument(
+        '--learning_rate', '-l', type=float, required=False, default=0.01)
+    parser.add_argument(
+        '--momentum', type=float, required=False, default=None)
+    parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
     args = parser.parse_args()
 
-    if not os.path.isfile(args.train):
-        raise RuntimeError('{} does not exist.'.format(args.train))
+    
 
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
     print(arg_str)
+    
+    optimisers = {
+        'sgd' : tf.keras.optimizers.SGD,
+        'adadelta' : tf.keras.optimizers.Adadelta,
+        'adagrad': tf.keras.optimizers.Adagrad,
+        'rmsprop': tf.keras.optimizers.RMSprop
+    }
 
     data_root = os.path.abspath(args.data_root) if len(args.data_root) else ''
     train_types = os.path.abspath(args.train)
@@ -145,8 +157,22 @@ def main():
     iterations = args.iterations
     save_interval = args.save_interval
     encoding_size = args.encoding_size
+    lr = args.learning_rate
+    momentum = args.momentum if args.momentum is not None else 0.0
     savepath = os.path.abspath(
         os.path.join(args.save_path, str(int(time.time()))))
+    
+    try:
+        optimiser = optimisers[args.optimiser.lower()]
+    except KeyError:
+        raise RuntimeError('{} not a recognised optimiser.'.format(
+            args.optimiser))
+    if args.momentum is not None and args.optimiser.lower() not in ['sgd',
+                                                                    'rmsprop']:
+        raise RuntimeError('Momentum only used for RMSProp and SGD optimisers.')
+    if not os.path.isfile(args.train):
+        raise RuntimeError('{} does not exist.'.format(args.train))
+        
     pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
     pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
         parents=True, exist_ok=True)
@@ -166,7 +192,8 @@ def main():
 
     # Train autoencoder
     zero_losses, nonzero_losses, losses = [], [], []
-    ae = AutoEncoder(dims, encoding_size=encoding_size)
+    ae = AutoEncoder(dims, encoding_size=encoding_size, optimiser=optimiser,
+                     lr=lr, momentum=momentum)
     ae.summary()
 
     print('Starting training cycle...')
@@ -190,7 +217,10 @@ def main():
             return_dict=True)
         zero_mse = loss['reconstruction_zero_mse']
         nonzero_mse = loss['reconstruction_nonzero_mse']
-        loss_ratio = nonzero_mse / zero_mse
+        if zero_mse > 1e-5:
+            loss_ratio = nonzero_mse / zero_mse
+        else:
+            loss_ratio = 50
         print('{0:0.3f}\t{1:0.3f}\t{2:0.3f}'.format(loss['loss'], nonzero_mse,
                                                     zero_mse))
         zero_losses.append(zero_mse)

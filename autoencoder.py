@@ -20,7 +20,8 @@ from functools import reduce
 
 class AutoEncoder(tf.keras.Model):
 
-    def __init__(self, dims, encoding_size=10):
+    def __init__(self, dims, encoding_size=10,
+                 optimiser=tf.keras.optimizers.SGD, lr=0.01, momentum=0.0):
         """Setup for autoencoder architecture."""
         input_image = Input(shape=dims, dtype=tf.float32, name='input')
         x = Conv3D(16, 3, padding='SAME', activation='relu',
@@ -76,10 +77,16 @@ class AutoEncoder(tf.keras.Model):
             outputs=[reconstruction, encoding]
         )
         self.add_loss(self.composite_mse(input_image, reconstruction, frac))
-        self.compile(
-            optimizer=tf.keras.optimizers.SGD(lr=0.1, momentum=0.9),
-            metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
-        )
+        try:
+            self.compile(
+                optimizer=optimiser(lr=lr, momentum=momentum),
+                metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
+            )
+        except TypeError:
+            self.compile(
+                optimizer=optimiser(lr=lr),
+                metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
+            )
 
     def nonzero_mse(self, target, reconstruction):
         """Mean squared error for non-zero values in the target matrix
