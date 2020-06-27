@@ -213,8 +213,8 @@ def main():
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=True)
         loss = ae.train_on_batch(
-            [input_tensor.tonumpy()/3, tf.constant(loss_ratio, shape=(1,))],
-            {'reconstruction': input_tensor.tonumpy()/3},
+            [input_tensor.tonumpy(), tf.constant(loss_ratio, shape=(1,))],
+            {'reconstruction': input_tensor.tonumpy()},
             return_dict=True)
         zero_mse = loss['reconstruction_zero_mse']
         nonzero_mse = loss['reconstruction_nonzero_mse']
