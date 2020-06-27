@@ -196,6 +196,7 @@ def main():
                      lr=lr, momentum=momentum)
     ae.summary()
 
+    loss_log = 'Iteration Composite Nonzero Zero\n'
     print('Starting training cycle...')
     loss_ratio = 0.5
     for iteration in range(iterations):
@@ -221,8 +222,16 @@ def main():
             loss_ratio = nonzero_mse / zero_mse
         else:
             loss_ratio = 50
-        print('{0:0.3f}\t{1:0.3f}\t{2:0.3f}'.format(loss['loss'], nonzero_mse,
-                                                    zero_mse))
+        loss_str = '{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}'.format(iteration,
+                                                         loss['loss'],
+                                                         nonzero_mse,
+                                                         zero_mse)
+        print(loss_str)
+        loss_log += loss_str
+        if not iteration % 2000:
+            with open(os.path.join(savepath, 'loss_log'), 'r') as f:
+                f.write(loss_log[:-1])
+        
         zero_losses.append(zero_mse)
         nonzero_losses.append(nonzero_mse)
         losses.append(loss['loss'])
