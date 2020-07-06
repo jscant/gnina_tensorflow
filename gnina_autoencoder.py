@@ -16,7 +16,7 @@ import pathlib
 import time
 import tensorflow as tf
 
-from autoencoder import AutoEncoder
+from autoencoder import AutoEncoder, DenseAutoEncoder, ShallowAutoEncoder
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 
@@ -49,8 +49,10 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
             degrees
 
     Returns:
-        Serialised protobuf message with structure defined in
-        gnina_embeddings.proto
+        Dictionary of serialised protein protobuf messages with structure
+        defined in gnina_embeddings.proto. Sturcture is:
+            
+            {receptor_path : serialised_protobuf_messages (1 per ligand)}
     """
 
     def get_paths():
@@ -77,7 +79,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     iterations = size // batch_size
 
     embeddings = {}
-    gnina_embeddings = gnina_embeddings_pb2.database()
+    serialised_embeddings = {}
 
     # Inference (obtain encodings)
     for iteration in range(iterations):
@@ -101,17 +103,18 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     # index maps onto the original paths dictionary so we can create a message
     # per protein.
     for receptor_path, ligands in paths.items():
-        receptor_msg = gnina_embeddings.protein.add()
-        receptor_msg.protein_path = receptor_path
+        receptor_msg = gnina_embeddings_pb2.protein()
+        receptor_msg.path = receptor_path
         for ligand in ligands:
             global_idx = ligand[0]
             ligand_path = ligand[1]
             embedding = embeddings[global_idx]
             ligand_msg = receptor_msg.ligand.add()
-            ligand_msg.ligand_path = ligand_path
+            ligand_msg.path = ligand_path
             ligand_msg.embedding.extend(embedding)
+        serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()
 
-    return gnina_embeddings.SerializeToString()
+    return serialised_embeddings
 
 
 def main():
@@ -138,11 +141,8 @@ def main():
         '--save_path', '-s', type=str, required=False, default='.')
     args = parser.parse_args()
 
-    
-
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
-    print(arg_str)
     
     optimisers = {
         'sgd' : tf.keras.optimizers.SGD,
@@ -177,8 +177,21 @@ def main():
     pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
         parents=True, exist_ok=True)
 
+    slurm_job_id = os.getenv('SLURM_JOB_ID')
+    
+    arg_str += '\nabsolute_save_path {}\n'.format(os.path.abspath(
+            savepath))
+    if isinstance(slurm_job_id, str):
+        slurm_log_file = os.path.join('~/slurm_logs', 'slurm_{}.out'.format(
+            slurm_job_id))
+        arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
+            slurm_job_id, slurm_log_file)
+    print(arg_str)
+    
     with open(os.path.join(savepath, 'config'), 'w') as f:
         f.write(arg_str)
+        
+    tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
@@ -192,12 +205,15 @@ def main():
 
     # Train autoencoder
     zero_losses, nonzero_losses, losses = [], [], []
-    ae = AutoEncoder(dims, encoding_size=encoding_size, optimiser=optimiser,
+    ae = DenseAutoEncoder(dims, encoding_size=encoding_size, optimiser=optimiser,
                      lr=lr, momentum=momentum)
     ae.summary()
-    
+    tf.keras.utils.plot_model(ae, os.path.join(savepath, 'model.png'),
+               show_shapes=True)
+
     loss_log = 'Iteration Composite Nonzero Zero\n'
     print('Starting training cycle...')
+    print('Working directory: {}'.format(os.path.abspath(savepath)))
     loss_ratio = 0.5
     for iteration in range(iterations):
         if iteration == iterations - 1:
@@ -210,25 +226,26 @@ def main():
                 savepath, 'checkpoints', 'ckpt_model_{}'.format(
                     iteration + 1))
             ae.save_weights(os.path.join(checkpoint_path, 'data'))
+            
         batch = e.next_batch(batch_size)
-        gmaker.forward(batch, input_tensor, 0, random_rotation=True)
+        gmaker.forward(batch, input_tensor, 0, random_rotation=False)
+        max_val = np.amax(input_tensor.tonumpy())
         loss = ae.train_on_batch(
-            [input_tensor.tonumpy(), tf.constant(loss_ratio, shape=(1,))],
-            {'reconstruction': input_tensor.tonumpy()},
+            [input_tensor.tonumpy()/max_val, tf.constant(loss_ratio, shape=(1,))],
+            {'reconstruction': input_tensor.tonumpy()/max_val},
             return_dict=True)
         zero_mse = loss['reconstruction_zero_mse']
         nonzero_mse = loss['reconstruction_nonzero_mse']
         if zero_mse > 1e-5:
-            loss_ratio = nonzero_mse / zero_mse
+            loss_ratio = min(50, nonzero_mse / zero_mse)
         else:
             loss_ratio = 50
-        loss_str = '{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}'.format(iteration,
-                                                         loss['loss'],
-                                                         nonzero_mse,
-                                                         zero_mse)
-        print(loss_str)
-        loss_log += loss_str
-        if not iteration % 2000:
+        loss_str = '{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}'.format(
+            iteration, loss['loss'], nonzero_mse, zero_mse)
+        
+        print(loss_str + '\t{0:0.3f}'.format(loss_ratio))
+        loss_log += loss_str + '\n'
+        if not iteration % 10:
             with open(os.path.join(savepath, 'loss_log'), 'w') as f:
                 f.write(loss_log[:-1])
         
@@ -242,13 +259,17 @@ def main():
     ax1.set_xlabel('Batches')
     ax2 = ax1.twinx()
     axes = [ax1, ax2]
+    cols = ['r-', 'b-']
+    labels = ['Zero_MSE', 'Nonzero_MSE']
+    lines = []
     for idx, losses in enumerate([zero_losses, nonzero_losses]):
         gap = 100
         losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
-        axes[idx].plot(np.arange(len(losses))*gap, losses)
+        line, = axes[idx].plot(
+            np.arange(len(losses))*gap, losses, cols[idx], label=labels[idx])
         axes[idx].set_ylabel('Loss')
-    ax1.legend(['zero_mse'])
-    ax2.legend(['nonzero_mse'])
+        lines.append(line)
+    ax1.legend(lines, [line.get_label() for line in lines])
     fig.savefig(os.path.join(savepath, 'zero_nonzero_losses.png'))
     
     # Plot composite mse
@@ -263,14 +284,18 @@ def main():
     ax1.legend(['composite_mse'])
     fig.savefig(os.path.join(savepath, 'composite_loss.png'))
         
-
     # Save encodings in serialised format
     print('Saving encodings...')
+    pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(exist_ok=True,
+                                                            parents=True)
     serialised_encodings = calculate_embeddings(
         ae, input_tensor, data_root, train_types)
-    with open(os.path.join(savepath, 'serialised_encodings.bin'), 'wb') as f:
-        f.write(serialised_encodings)
+    for receptor_path, ligands in serialised_encodings.items():
+        fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
+        with open(os.path.join(savepath, 'encodings', fname), 'wb') as f:
+            f.write(ligands)
 
 
 if __name__ == '__main__':
+    molgrid.set_gpu_enabled(False)
     main()

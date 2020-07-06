@@ -2,16 +2,12 @@ syntax = "proto3";
 
 package gnina_autoencoder;
 
-message ligand_obj {
-    string ligand_path = 1;
+message ligand {
+    string path = 1;
     repeated float embedding = 2 [packed=true];
 }
 
-message protein_obj {
-    string protein_path = 1;
-    repeated ligand_obj ligand = 2;
-}
-
-message database {
-    repeated protein_obj protein = 1;
+message protein {
+    string path = 1;
+    repeated ligand ligand = 2;
 }
