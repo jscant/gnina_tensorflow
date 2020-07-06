@@ -19,6 +19,7 @@ from operator import mul
 from functools import reduce
 from model_definitions import tf_transition_block,\
     tf_inverse_transition_block, tf_dense_block
+import os
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -269,7 +270,7 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         super(DenseAutoEncoder, self).__init__(
             optimiser, lr, momentum
-        )
+        )    
 
 
 if __name__ == '__main__':
