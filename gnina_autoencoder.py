@@ -118,6 +118,16 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
 
 
 def pickup(path):
+    """Loads saved keras autoencoder.
+    
+    Arguments:
+        path: location of saved weights and architecture
+        
+    Returns:
+        DenseAutoEncoder object initialised with weights from saved checkpoint,
+        as well as a dictionary containing the command line arguments taken
+        from the config file used to produce the saved model.
+    """
     path = os.path.abspath(path)
     config_path = '/'.join([d for d in path.split('/')[:-2]])
     config_file = os.path.join(config_path, 'config')
