@@ -117,11 +117,12 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     return serialised_embeddings
 
 
-def pickup(path):
+def pickup(path, autoencoder_class):
     """Loads saved keras autoencoder.
     
     Arguments:
         path: location of saved weights and architecture
+        ae_class: class derived from the AutoEncoderBase class
         
     Returns:
         DenseAutoEncoder object initialised with weights from saved checkpoint,
@@ -160,9 +161,9 @@ def pickup(path):
     ae = tf.keras.models.load_model(
         path,
         custom_objects={
-            'zero_mse': DenseAutoEncoder.zero_mse,
-            'nonzero_mse': DenseAutoEncoder.nonzero_mse,
-            'composite_mse': DenseAutoEncoder.composite_mse
+            'zero_mse': autoencoder_class.zero_mse,
+            'nonzero_mse': autoencoder_class.nonzero_mse,
+            'composite_mse': autoencoder_class.composite_mse
             }
         )
     return ae, args
@@ -201,7 +202,7 @@ def main():
     load_model = False
     if args.pickup is not None:
         load_model = True
-        ae, loaded_args = pickup(args.pickup)
+        ae, loaded_args = pickup(args.pickup, DenseAutoEncoder)
         args = argparse.Namespace(
             pickup=args.pickup,
             data_root=loaded_args['data_root'],
@@ -242,8 +243,18 @@ def main():
     encoding_size = args.encoding_size
     lr = args.learning_rate
     momentum = args.momentum if args.momentum is not None else 0.0
-    savepath = os.path.abspath(
-        os.path.join(args.save_path, str(int(time.time()))))
+    
+    slurm_job_id = os.getenv('SLURM_JOB_ID')
+    if isinstance(slurm_job_id, str):
+        slurm_log_file = os.path.join(
+            '~/slurm_logs', 'slurm_{}.out'.format(slurm_job_id))
+        arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
+            slurm_job_id, slurm_log_file)
+        savepath = os.path.abspath(
+                os.path.join(args.save_path, slurm_job_id))
+    else:
+        savepath = os.path.abspath(
+            os.path.join(args.save_path, str(int(time.time()))))
     
     try:
         optimiser = optimisers[args.optimiser.lower()]
@@ -261,15 +272,12 @@ def main():
     pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
         parents=True, exist_ok=True)
 
-    slurm_job_id = os.getenv('SLURM_JOB_ID')
+    
     
     arg_str += '\nabsolute_save_path {}\n'.format(os.path.abspath(
             savepath))
-    if isinstance(slurm_job_id, str):
-        slurm_log_file = os.path.join(
-            '~/slurm_logs', 'slurm_{}.out'.format(slurm_job_id))
-        arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
-            slurm_job_id, slurm_log_file)
+    
+    
     print(arg_str)
         
     with open(os.path.join(savepath, 'config'), 'w') as f:
