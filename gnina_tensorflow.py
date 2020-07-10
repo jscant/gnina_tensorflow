@@ -16,133 +16,14 @@ import torch
 import molgrid
 import numpy as np
 import pathlib
-import datetime
 
-from collections import defaultdict
 from model_definitions import define_baseline_model, define_densefs_model
+from gnina_functions import process_batch, beautify_config
+
 from tensorflow.keras.utils import plot_model
-import gnina_embeddings_pb2
+from inference import inference
 
 import matplotlib.pyplot as plt
-
-
-class Timer:
-    """
-    Simple timer class.
-
-    To time a block of code, wrap it like so:
-
-        with Timer() as t:
-            <some_code>
-        total_time = t.interval
-
-    The time taken for the code to execute is stored in t.interval.
-    """
-
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, *args):
-        self.end = time.time()
-        self.interval = self.end - self.start
-
-
-def beautify_config(config, fname=None):
-    """
-    Formats dictionary into two columns, sorted in alphabetical order.
-
-    Arguments:
-        config: any dictionary
-        fname: string containing valid path to filename for writing beautified
-            config to. If left blank, output will be printed to stdout.
-    """
-    output = 'Time of experiment generation: {:%d-%m-%Y %H:%M:%S}\n\n'.format(
-        datetime.datetime.now())
-
-    sorted_config = sorted(
-        [(arg, value) for arg, value in config.items()], key=lambda x: x[0]
-    )
-
-    # Padding magic
-    max_len = max([len(i) for i in [arg for arg, _ in sorted_config]]) + 4
-    padding = ' ' * max_len
-
-    for arg, value in sorted_config:
-        output += '{0}:{1}{2}\n'.format(arg, padding[len(arg):], value)
-    if fname is not None:
-        with open(fname, 'w') as f:
-            f.write(output[:-1])
-    else:
-        print(output)
-
-
-def get_test_info(test_file):
-    """
-    Obtains information about gninatypes file.
-
-    Arguments:
-        test_file: text file containing labels and paths to gninatypes files
-
-    Returns:
-        dictionary containing tuples with the format:
-            {index : (receptor_path, ligand_path)}
-            where index is the line number, receptor_path is the path to the
-            receptor gninatype and ligand_path is the path to the ligand
-            gninatype.
-    """
-    paths = {}
-    with open(test_file, 'r') as f:
-        for idx, line in enumerate(f.readlines()):
-            chunks = line.strip().split()
-            paths[idx] = (chunks[-2], chunks[-1])
-    return paths, len(paths)
-
-
-def process_batch(model, example_provider, gmaker, input_tensor,
-                  labels_tensor=None, train=True):
-    """
-    Feeds forward and backpropagates (if train==True) batch of examples.
-
-    Arguments:
-        model: compiled tensorflow model
-        example_provider: molgrid.ExampleProvider object populated with a
-            types file
-        gmaker: molgrid.GridMaker object
-        input_tensor: molgrid.MGrid<x>f object, where <x> is the dimentions
-            of the input (including a dimention for batch size)
-        labels_tensor: molgrid.MGrid1f object, for storing true labels. If
-            labels_tensor is None and train is False, , return value will be
-            a vector of predictions.
-
-    Returns:
-        if labels_tensor is None and train is False: numpy.ndarray of
-            predictions
-        if labels_tensor is specified and train is False: tuple containing
-            numpy.ndarray of labels and numpy.ndarray of predictions
-        if labels_tensor is specified and train is True: float containing
-            the mean loss over the batch (usually cross-entropy)
-
-    Raises:
-        RuntimeError: if labels_tensor is None and train is True
-    """
-    if train and labels_tensor is None:
-        raise RuntimeError('Labels must be provided for backpropagation',
-                           'if train == True')
-    batch = example_provider.next_batch(input_tensor.shape[0])
-    gmaker.forward(batch, input_tensor, 0, random_rotation=train)
-
-    if labels_tensor is None:  # We don't know labels; just return predictions
-        return model.predict_on_batch(input_tensor.tonumpy())
-
-    batch.extract_label(0, labels_tensor)  # y_true
-    if train:  # Return loss
-        return model.train_on_batch(
-            input_tensor.tonumpy(), labels_tensor.tonumpy())
-    else:  # Return labels, predictions
-        return (labels_tensor.tonumpy(),
-                model.predict_on_batch(input_tensor.tonumpy()))
-
 
 def main():
     # Create and parse command line args
@@ -278,79 +159,9 @@ def main():
 
     # Perform inference if test types file is provided
     if test_types is not None:
-
-        # Setup molgrid.ExampleProvider and GridMaker to feed into network
-        e_test = molgrid.ExampleProvider(
-            data_root=data_root, balanced=False, shuffle=False)
-        e_test.populate(test_types)
-
-        paths, size = get_test_info(test_types)  # For indexing in output
-        test_output_string = ''
-
-        representations_dict = defaultdict(dict)
-        with Timer() as t:
-            for iteration in range(size // batch_size):
-                labels_numpy, predictions = process_batch(
-                    model, e_test, gmaker, input_tensor, labels_tensor=labels, 
-                    train=False)
-                representations = [p.flatten() for p in predictions[1]]
-                predictions = predictions[0]
-                for i in range(batch_size):
-                    index = iteration*batch_size + i
-                    rec_path = paths[index][0]
-                    lig_path = paths[index][1]
-                    representations_dict[
-                        rec_path][lig_path] = representations[i]
-                    test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
-                        int(labels_numpy[i]),
-                        predictions[i][1],
-                        paths[index][0],
-                        paths[index][1]
-                    )
-
-            remainder = size % batch_size            
-            labels_numpy, predictions = process_batch(
-                model, e_test, gmaker, input_tensor, labels_tensor=labels,
-                train=False)
-            representations = [p.flatten() for p in predictions[1]]
-            predictions = predictions[0]
-            for i in range(remainder):
-                index = size // batch_size + i
-                rec_path = paths[index][0]
-                lig_path = paths[index][1]
-                representations_dict[
-                    rec_path][lig_path] = representations[i]
-                test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
-                    int(labels_numpy[i]),
-                    predictions[i][1],
-                    paths[index][0],
-                    paths[index][1]
-                )
-
-        print('Total inference time ({}):'.format(model_str), t.interval, 's')
+        inference(model, test_types, data_root, savepath, batch_size,
+                  gmaker, input_tensor, labels)
         
-        # Save predictions to disk
-        with open(os.path.join(savepath, 'predictions_{}.txt'.format(
-                model_str.lower())), 'w') as f:
-            f.write(test_output_string[:-1])
-        
-        serialised_embeddings = {}
-        for receptor_path, ligands in representations_dict.items():
-            receptor_msg = gnina_embeddings_pb2.protein()
-            receptor_msg.path = receptor_path
-            for ligand_path, representation in ligands.items():
-                ligand_msg = receptor_msg.ligand.add()
-                ligand_msg.path = ligand_path
-                ligand_msg.embedding.extend(representation)
-            serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()
-            break
-        
-        pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(
-            parents=True, exist_ok=True)
-        for receptor_path, ligands in serialised_embeddings.items():
-            fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-            with open(os.path.join(savepath, 'encodings', fname), 'wb') as f:
-                f.write(ligands)
 
 if __name__ == '__main__':
     main()
