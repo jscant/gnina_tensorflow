@@ -40,6 +40,7 @@ class AutoEncoderBase(tf.keras.Model):
 
         self.add_loss(self.composite_mse(
             self.input_image, self.reconstruction, self.frac))
+        #self.add_loss(tf.keras.losses.mse(self.input, self.reconstruction))
         try:
             self.compile(
                 optimizer=optimiser(lr=lr, momentum=momentum),
@@ -237,20 +238,22 @@ class DenseAutoEncoder(AutoEncoderBase):
         # convolution [2]
         x = tf_dense_block(x, 4, "db_3")
         x = tf_transition_block(x, 0.5, "tb_3", final=False)
-        x = tf_dense_block(x, 4, "db_4")
-        x = tf_transition_block(x, 0.5, "tb_4", final=True)
-        final_shape = x.shape
-        x = GlobalMaxPooling3D(data_format='channels_first')(x)
+        #x = tf_dense_block(x, 4, "db_4")
+        #x = tf_transition_block(x, 0.5, "tb_4", final=True)
         
+        final_shape = x.shape
+        x = Flatten(data_format='channels_first')(x)
+        #x = GlobalMaxPooling3D(data_format='channels_first')(x)
         self.encoding = Dense(encoding_size, activation='sigmoid',
                          name='encoding')(x)
         
         decoding = Dense(reduce(mul, final_shape[1:]))(self.encoding)
         reshaped = Reshape(final_shape[1:])(decoding)
         
-        x = Conv3D(32, 2, activation='relu', padding='SAME', use_bias=False,
-                   data_format='channels_first')(reshaped)
-        x = tf_inverse_transition_block(x, 0.5, 'itb_1')
+        #x = Conv3D(32, 2, activation='relu', padding='SAME', use_bias=False,
+        #           data_format='channels_first')(reshaped)
+        
+        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1')
         x = tf_dense_block(x, 4, 'idb_1')
         
         x = tf_inverse_transition_block(x, 0.5, 'itb_2')
@@ -274,16 +277,10 @@ class DenseAutoEncoder(AutoEncoderBase):
 
 
 if __name__ == '__main__':
+    from contextlib import redirect_stdout
+    tf.keras.backend.clear_session()
     d = DenseAutoEncoder((28, 48, 48, 48), encoding_size=100)
-    d.summary()
-    max_nums = 0
-    for layer in d.layers:
-        try:
-            if not isinstance(layer.output_shape, tuple):
-                continue
-            print(layer.output_shape)
-            max_nums = max(max_nums, reduce(mul, layer.output_shape[1:]))
-        except AttributeError:
-            continue
-    print(max_nums)
-        
+    
+    with open('file_2.model', 'w') as f:
+        with redirect_stdout(f):
+            d.summary()

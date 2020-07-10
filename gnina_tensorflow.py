@@ -18,8 +18,10 @@ import numpy as np
 import pathlib
 import datetime
 
+from collections import defaultdict
 from model_definitions import define_baseline_model, define_densefs_model
 from tensorflow.keras.utils import plot_model
+import gnina_embeddings_pb2
 
 import matplotlib.pyplot as plt
 
@@ -128,7 +130,7 @@ def process_batch(model, example_provider, gmaker, input_tensor,
         raise RuntimeError('Labels must be provided for backpropagation',
                            'if train == True')
     batch = example_provider.next_batch(input_tensor.shape[0])
-    gmaker.forward(batch, input_tensor, 0, random_rotation=True)
+    gmaker.forward(batch, input_tensor, 0, random_rotation=train)
 
     if labels_tensor is None:  # We don't know labels; just return predictions
         return model.predict_on_batch(input_tensor.tonumpy())
@@ -156,6 +158,11 @@ def main():
         '--batch_size', '-b', type=int, required=False, default=16)
     parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
+    parser.add_argument('--save_interval', type=int, default=10000)
+    parser.add_argument(
+    '--use_cpu', '-g', action='store_true')
+    parser.add_argument(
+        '--use_densenet_bc', action='store_true')
     args = parser.parse_args()
 
     # We need to train or test
@@ -180,6 +187,7 @@ def main():
     savepath = os.path.abspath(
         os.path.join(args.save_path, ['baseline', 'densefs'][use_densefs],
                      str(int(time.time()))))
+    save_interval = args.save_interval
 
     # Create config dict for saving to disk later
     config_args['data_root'] = data_root
@@ -189,7 +197,15 @@ def main():
     config_args['batch_size'] = batch_size
     config_args['iterations'] = iterations
     config_args['save_path'] = savepath
+    config_args['save_interval'] = save_interval
+    config_args['use_cpu'] = args.use_cpu
+    config_args['use_densenet_bc'] = args.use_densenet_bc
     beautify_config(config_args)
+    
+    if args.use_cpu:
+        molgrid.set_gpu_enabled(False)
+    else:
+        molgrid.set_gpu_enabled(True)
 
     gap = 100  # Window to average training loss over (in batches)
 
@@ -205,12 +221,13 @@ def main():
     labels = molgrid.MGrid1f(batch_size)
     input_tensor = molgrid.MGrid5f(*tensor_shape)
 
-    pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
+    pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
+        parents=True, exist_ok=True)
 
     # We are ready to define our model and train
     losses = []
     if use_densefs:
-        model = define_densefs_model(dims)
+        model = define_densefs_model(dims, bc=args.use_densenet_bc)
     else:
         model = define_baseline_model(dims)
 
@@ -222,13 +239,24 @@ def main():
 
     losses_string = ''
     for iteration in range(iterations):
-
+        if iteration == iterations - 1:
+            checkpoint_path = os.path.join(
+                savepath, 'checkpoints', 'final_model_{}'.format(
+                    iteration + 1))
+            model.save(checkpoint_path)
+        elif not (iteration + 1) % save_interval:
+            checkpoint_path = os.path.join(
+                savepath, 'checkpoints', 'ckpt_model_{}'.format(
+                    iteration + 1))
+            model.save(checkpoint_path)
         # Data: e > gmaker > input_tensor > network (forward and backward pass)
         loss = process_batch(model, e, gmaker, input_tensor, labels,
                              train=True)
 
         # Save losses to disk
-        losses.append(float(loss))
+        if not isinstance(loss, float):
+            loss = loss[0]
+        losses.append(loss)
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(os.path.join(savepath, 'loss_history_{}.txt'.format(
                 model_str.lower())), 'w') as f:
@@ -243,7 +271,7 @@ def main():
               for window in np.arange(0, iterations, step=gap)]
     plt.plot(np.arange(0, iterations, gap), losses)
     plt.legend([model_str])
-    plt.title('Cross-entropy loss history for DenseFS network'.format(
+    plt.title('Cross-entropy loss history for {} network'.format(
         model_str))
     plt.savefig(os.path.join(savepath, 'densefs_loss.png'))
     print('Finished {}\n\n'.format(model_str))
@@ -259,14 +287,20 @@ def main():
         paths, size = get_test_info(test_types)  # For indexing in output
         test_output_string = ''
 
+        representations_dict = defaultdict(dict)
         with Timer() as t:
             for iteration in range(size // batch_size):
-                labels_numpy, predictions = process_batch(model, e_test,
-                                                          gmaker, input_tensor,
-                                                          labels_tensor=labels,
-                                                          train=False)
+                labels_numpy, predictions = process_batch(
+                    model, e_test, gmaker, input_tensor, labels_tensor=labels, 
+                    train=False)
+                representations = [p.flatten() for p in predictions[1]]
+                predictions = predictions[0]
                 for i in range(batch_size):
                     index = iteration*batch_size + i
+                    rec_path = paths[index][0]
+                    lig_path = paths[index][1]
+                    representations_dict[
+                        rec_path][lig_path] = representations[i]
                     test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
                         int(labels_numpy[i]),
                         predictions[i][1],
@@ -274,20 +308,18 @@ def main():
                         paths[index][1]
                     )
 
-            # Because we will have some number > batch_size remaining
-            final_batch_size = size % batch_size
-            final_tensor_shape = (final_batch_size,) + dims
-
-            final_labels = molgrid.MGrid1f(final_batch_size)
-            final_input_tensor = molgrid.MGrid5f(*final_tensor_shape)
-
-            labels_numpy, predictions = process_batch(model, e_test, gmaker,
-                                                      final_input_tensor,
-                                                      labels_tensor=final_labels,
-                                                      train=False)
-
-            for i in range(final_batch_size):
-                index = iteration*batch_size + i
+            remainder = size % batch_size            
+            labels_numpy, predictions = process_batch(
+                model, e_test, gmaker, input_tensor, labels_tensor=labels,
+                train=False)
+            representations = [p.flatten() for p in predictions[1]]
+            predictions = predictions[0]
+            for i in range(remainder):
+                index = size // batch_size + i
+                rec_path = paths[index][0]
+                lig_path = paths[index][1]
+                representations_dict[
+                    rec_path][lig_path] = representations[i]
                 test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
                     int(labels_numpy[i]),
                     predictions[i][1],
@@ -296,12 +328,29 @@ def main():
                 )
 
         print('Total inference time ({}):'.format(model_str), t.interval, 's')
-
+        
         # Save predictions to disk
         with open(os.path.join(savepath, 'predictions_{}.txt'.format(
                 model_str.lower())), 'w') as f:
             f.write(test_output_string[:-1])
-
+        
+        serialised_embeddings = {}
+        for receptor_path, ligands in representations_dict.items():
+            receptor_msg = gnina_embeddings_pb2.protein()
+            receptor_msg.path = receptor_path
+            for ligand_path, representation in ligands.items():
+                ligand_msg = receptor_msg.ligand.add()
+                ligand_msg.path = ligand_path
+                ligand_msg.embedding.extend(representation)
+            serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()
+            break
+        
+        pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(
+            parents=True, exist_ok=True)
+        for receptor_path, ligands in serialised_embeddings.items():
+            fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
+            with open(os.path.join(savepath, 'encodings', fname), 'wb') as f:
+                f.write(ligands)
 
 if __name__ == '__main__':
     main()
