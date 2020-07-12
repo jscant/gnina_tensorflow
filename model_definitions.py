@@ -267,7 +267,7 @@ def tf_transition_block(x, reduction, name, final=False):
         use_bias=False,
         name=name + '_conv',
         data_format='channels_first')(x)
-    x = layers.AveragePooling3D(2, strides=2, name=name + '_pool',
+    x = layers.MaxPooling3D(2, strides=2, name=name + '_pool',
                                 data_format='channels_first')(x)
     return x
 
