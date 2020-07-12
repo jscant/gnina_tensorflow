@@ -243,7 +243,9 @@ def main():
         'sgd' : tf.keras.optimizers.SGD,
         'adadelta' : tf.keras.optimizers.Adadelta,
         'adagrad': tf.keras.optimizers.Adagrad,
-        'rmsprop': tf.keras.optimizers.RMSprop
+        'rmsprop': tf.keras.optimizers.RMSprop,
+        'adamax': tf.keras.optimizers.Adamax,
+        'adam': tf.keras.optimizers.Adam
     }
 
     data_root = os.path.abspath(args.data_root) if len(

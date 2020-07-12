@@ -34,6 +34,7 @@ def define_baseline_model(dims):
 
     Arguments:
         dims: tuple with input dimensions.
+        
     Returns:
         Compiled keras model with DenseFS architecture
     """
@@ -78,6 +79,7 @@ def define_densefs_model(dims, bc=False):
 
     Arguments:
         dims: tuple with input dimensions.
+        
     Returns:
         Compiled keras model with original gnina architecture
     """
@@ -134,6 +136,7 @@ def dense_block(x, blocks, name):
         x: input tensor.
         blocks: integer, the number of building blocks.
         name: string, block label.
+        
     Returns:
         Output tensor for the block.
     """
@@ -149,6 +152,7 @@ def transition_block(x, reduction, name, final=False):
         x: input tensor.
         reduction: float, compression rate at transition layers.
         name: string, block label.
+        
     Returns:
         output tensor for the block.
     """
@@ -176,6 +180,7 @@ def inverse_transition_block(x, reduction, name, final=False):
         x: input tensor.
         reduction: float, compression rate at transition layers.
         name: string, block label.
+        
     Returns:
         output tensor for the block.
     """
@@ -203,6 +208,7 @@ def conv_block(x, growth_rate, name):
         x: input tensor.
         growth_rate: float, growth rate at dense layers.
         name: string, block label.
+        
     Returns:
         Output tensor for the block.
     """
@@ -223,10 +229,12 @@ def conv_block(x, growth_rate, name):
 
 def tf_dense_block(x, blocks, name):
     """A dense block.
+    
     Arguments:
       x: input tensor.
       blocks: integer, the number of building blocks.
       name: string, block label.
+      
     Returns:
       Output tensor for the block.
     """
@@ -237,10 +245,12 @@ def tf_dense_block(x, blocks, name):
 
 def tf_transition_block(x, reduction, name, final=False):
     """A transition block.
+    
     Arguments:
       x: input tensor.
       reduction: float, compression rate at transition layers.
       name: string, block label.
+      
     Returns:
       output tensor for the block.
     """
@@ -263,10 +273,12 @@ def tf_transition_block(x, reduction, name, final=False):
 
 def tf_inverse_transition_block(x, reduction, name, final=False):
     """A transition block.
+    
     Arguments:
       x: input tensor.
       reduction: float, compression rate at transition layers.
       name: string, block label.
+      
     Returns:
       output tensor for the block.
     """
@@ -289,10 +301,12 @@ def tf_inverse_transition_block(x, reduction, name, final=False):
 
 def tf_conv_block(x, growth_rate, name):
     """A building block for a dense block.
+    
     Arguments:
       x: input tensor.
       growth_rate: float, growth rate at dense layers.
       name: string, block label.
+      
     Returns:
       Output tensor for the block.
     """

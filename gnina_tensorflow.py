@@ -125,11 +125,7 @@ def main():
                 savepath, 'checkpoints', 'final_model_{}'.format(
                     iteration + 1))
             model.save(checkpoint_path)
-        elif not (iteration + 1) % save_interval:
-            checkpoint_path = os.path.join(
-                savepath, 'checkpoints', 'ckpt_model_{}'.format(
-                    iteration + 1))
-            model.save(checkpoint_path)
+        
         # Data: e > gmaker > input_tensor > network (forward and backward pass)
         loss = process_batch(model, e, gmaker, input_tensor, labels,
                              train=True)
@@ -145,7 +141,10 @@ def main():
         print(iteration, 'loss: {0:0.3f}'.format(loss))
 
     # Save model for later inference
-    model.save(savepath)
+    checkpoint_path = os.path.join(
+        savepath, 'checkpoints', 'ckpt_model_{}'.format(
+            iteration + 1))
+    model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
     losses = [np.mean(losses[window:window + gap])
