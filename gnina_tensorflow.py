@@ -69,8 +69,7 @@ def main():
     if not isinstance(folder, str):
         folder = str(int(time.time()))
     savepath = os.path.abspath(
-        os.path.join(args.save_path, ['baseline', 'densefs'][use_densefs],
-                     folder))
+        os.path.join(args.save_path, folder))
     save_interval = args.save_interval
 
     # Create config dict for saving to disk later
