@@ -10,20 +10,19 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.x
 """
 
 import argparse
-import os
-import time
-import torch
+import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
+import os
 import pathlib
+import time
+import torch
 
 from model_definitions import define_baseline_model, define_densefs_model
 from gnina_functions import process_batch, beautify_config
 
 from tensorflow.keras.utils import plot_model
 from inference import inference
-
-import matplotlib.pyplot as plt
 
 def main():
     # Create and parse command line args
@@ -65,9 +64,13 @@ def main():
     use_densefs = args.densefs
     batch_size = args.batch_size
     iterations = args.iterations
+    
+    folder = os.env('SLURM_JOB_ID')
+    if not isinstance(folder, str):
+        folder = str(int(time.time()))
     savepath = os.path.abspath(
         os.path.join(args.save_path, ['baseline', 'densefs'][use_densefs],
-                     str(int(time.time()))))
+                     folder))
     save_interval = args.save_interval
 
     # Create config dict for saving to disk later
@@ -89,6 +92,8 @@ def main():
         molgrid.set_gpu_enabled(True)
 
     gap = 100  # Window to average training loss over (in batches)
+
+    molgrid.set_random_seed(np.random.randint(0, int(1e7)))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
