@@ -40,15 +40,16 @@ class AutoEncoderBase(tf.keras.Model):
 
         self.add_loss(self.composite_mse(
             self.input_image, self.reconstruction, self.frac))
-        #self.add_loss(tf.keras.losses.mse(self.input, self.reconstruction))
         try:
             self.compile(
                 optimizer=optimiser(lr=lr, momentum=momentum),
+         #       loss='mse',
                 metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
             )
         except TypeError:
             self.compile(
                 optimizer=optimiser(lr=lr),
+         #       loss='mse',
                 metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
             )
             

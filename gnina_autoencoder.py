@@ -344,9 +344,9 @@ def main():
         zero_mse = loss['reconstruction_zero_mse']
         nonzero_mse = loss['reconstruction_nonzero_mse']
         if zero_mse > 1e-5:
-            loss_ratio = min(50, nonzero_mse / zero_mse)
+            loss_ratio = min(25, nonzero_mse / zero_mse)
         else:
-            loss_ratio = 50
+            loss_ratio = 25
         loss_str = '{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}'.format(
             iteration, loss['loss'], nonzero_mse, zero_mse)
         

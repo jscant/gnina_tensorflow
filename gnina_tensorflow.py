@@ -65,12 +65,15 @@ def main():
     batch_size = args.batch_size
     iterations = args.iterations
     
-    folder = os.env('SLURM_JOB_ID')
+    folder = os.getenv('SLURM_JOB_ID')
     if not isinstance(folder, str):
         folder = str(int(time.time()))
     savepath = os.path.abspath(
         os.path.join(args.save_path, folder))
     save_interval = args.save_interval
+    
+    seed = np.random.randint(0, int(1e7))
+    molgrid.set_random_seed(seed)
 
     # Create config dict for saving to disk later
     config_args['data_root'] = data_root
@@ -83,6 +86,7 @@ def main():
     config_args['save_interval'] = save_interval
     config_args['use_cpu'] = args.use_cpu
     config_args['use_densenet_bc'] = args.use_densenet_bc
+    config_args['random_seed'] = seed
     beautify_config(config_args)
     
     if args.use_cpu:
@@ -92,11 +96,10 @@ def main():
 
     gap = 100  # Window to average training loss over (in batches)
 
-    molgrid.set_random_seed(np.random.randint(0, int(1e7)))
-
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
         data_root=data_root, balanced=True, shuffle=True)
+    print(e.settings().data_root)
     e.populate(train_types)
 
     gmaker = molgrid.GridMaker()
