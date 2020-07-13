@@ -11,12 +11,13 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.x
 
 import argparse
 import matplotlib.pyplot as plt
+import torch
 import molgrid
 import numpy as np
 import os
 import pathlib
 import time
-import torch
+
 
 from model_definitions import define_baseline_model, define_densefs_model
 from gnina_functions import process_batch, beautify_config
