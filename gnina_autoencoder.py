@@ -179,6 +179,11 @@ def pickup(path, autoencoder_class):
             'composite_mse': autoencoder_class.composite_mse
             }
         )
+    # Bug with add_loss puts empty dict at the end of model._layers which
+    # interferes with some functionality (such as
+    # tf.keras.utils.plot_model)
+    ae._layers = [layer for layer in ae._layers if isinstance(
+        layer, tf.keras.layers.Layer)]
     return ae, args
         
 
