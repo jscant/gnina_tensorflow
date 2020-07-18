@@ -11,6 +11,7 @@ import os
 import torch
 import molgrid
 import pathlib
+import tensorflow as tf
 
 from collections import defaultdict
 
@@ -126,10 +127,8 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', '-s', type=str, default='')
     args = parser.parse_args()
     
-    if args.densefs:  
-        from model_definitions import define_densefs_model as model_def
-    else:
-        from model_definitions import define_baseline_model as model_def
-    model = model_def((28, 48, 48, 48))
+    model = tf.keras.models.load_model(
+        args.model_dir
+    )
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size)
