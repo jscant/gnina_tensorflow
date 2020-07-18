@@ -62,7 +62,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
                 lig_path = paths[index][1]
                 representations_dict[
                     rec_path][lig_path] = representations[i]
-                test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
+                test_output_string += '{0} | {1:0.7f} {2} {3}\n'.format(
                     int(labels_numpy[i]),
                     predictions[i][1],
                     paths[index][0],
@@ -85,7 +85,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
             lig_path = paths[index][1]
             representations_dict[
                 rec_path][lig_path] = representations[i]
-            test_output_string += '{0} | {1:0.3f} {2} {3}\n'.format(
+            test_output_string += '{0} | {1:0.7f} {2} {3}\n'.format(
                 int(labels_numpy[i]),
                 predictions[i][1],
                 paths[index][0],
