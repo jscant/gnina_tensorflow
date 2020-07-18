@@ -98,8 +98,9 @@ def inference(model, test_types, data_root, savepath, batch_size,
     print('Total inference time:', t.interval, 's')
     
     # Save predictions to disk
-    pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(
-        parents=True, exist_ok=True)
+    embeddings_dir = os.path.join(savepath, 'encodings_{}'.format(
+            test_types.split('/')[-1].split('.')[0]))
+    pathlib.Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
     
     serialised_embeddings = {}
     for receptor_path, ligands in representations_dict.items():
@@ -113,8 +114,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
     
     for receptor_path, ligands in serialised_embeddings.items():
         fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-        with open(os.path.join(savepath, 'encodings_{}'.format(
-            test_types.split('/')[-1].split('.')[0]), fname), 'wb') as f:
+        with open(os.path.join(embeddings_dir, fname), 'wb') as f:
             f.write(ligands)
 
 
