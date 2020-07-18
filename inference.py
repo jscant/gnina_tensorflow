@@ -113,7 +113,8 @@ def inference(model, test_types, data_root, savepath, batch_size,
     
     for receptor_path, ligands in serialised_embeddings.items():
         fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-        with open(os.path.join(savepath, 'encodings', fname), 'wb') as f:
+        with open(os.path.join(savepath, 'encodings_{}'.format(
+            test_types.split('/')[-1].split('.')[0]), fname), 'wb') as f:
             f.write(ligands)
 
 
