@@ -132,4 +132,4 @@ if __name__ == '__main__':
         from model_definitions import define_baseline_model as model_def
     model = model_def((28, 48, 48, 48))
     inference(
-        model, args.test, args.data_root, args.save_path, args.iterations)
+        model, args.test, args.data_root, args.save_path, args.batch_size)
