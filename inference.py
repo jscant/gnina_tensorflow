@@ -21,13 +21,15 @@ import gnina_embeddings_pb2
 def inference(model, test_types, data_root, savepath, batch_size,
               gmaker=None, input_tensor=None, labels=None):
     
+    predictions_output = os.path.join(savepath, 'predictions_{}.txt'.format(
+            test_types.split('/')[-1].split('.')[0]))
+    
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
     e_test = molgrid.ExampleProvider(
         data_root=data_root, balanced=False, shuffle=False)
     e_test.populate(test_types)
 
     paths, size = get_test_info(test_types)  # For indexing in output
-    test_output_string = ''
 
     if gmaker is None:
         gmaker = molgrid.GridMaker()
@@ -42,6 +44,10 @@ def inference(model, test_types, data_root, savepath, batch_size,
 
     print('Performing inference on {} examples'.format(size))
     representations_dict = defaultdict(dict)
+    test_output_string = ''
+    with open(predictions_output, 'w') as f:
+        f.write('')
+        
     with Timer() as t:
         for iteration in range(size // batch_size):
             labels_numpy, predictions = process_batch(
@@ -61,6 +67,10 @@ def inference(model, test_types, data_root, savepath, batch_size,
                     paths[index][0],
                     paths[index][1]
                 )
+            if not iteration % 1000:
+                with open(predictions_output, 'a') as f:
+                    f.write(test_output_string)
+                test_output_string = ''
 
         remainder = size % batch_size            
         labels_numpy, predictions = process_batch(
@@ -80,14 +90,15 @@ def inference(model, test_types, data_root, savepath, batch_size,
                 paths[index][0],
                 paths[index][1]
             )
+        with open(predictions_output, 'a') as f:
+            f.write(test_output_string[:-1])
+
 
     print('Total inference time:', t.interval, 's')
     
     # Save predictions to disk
     pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(
         parents=True, exist_ok=True)
-    with open(os.path.join(savepath, 'predictions.txt'), 'w') as f:
-        f.write(test_output_string[:-1])
     
     serialised_embeddings = {}
     for receptor_path, ligands in representations_dict.items():
