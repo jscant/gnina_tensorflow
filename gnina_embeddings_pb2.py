@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x16gnina_embeddings.proto\x12\x11gnina_autoencoder\"-\n\x06ligand\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x15\n\tembedding\x18\x02 \x03(\x02\x42\x02\x10\x01\"B\n\x07protein\x12\x0c\n\x04path\x18\x01 \x01(\t\x12)\n\x06ligand\x18\x02 \x03(\x0b\x32\x19.gnina_autoencoder.ligandb\x06proto3'
+  serialized_pb=b'\n\x16gnina_embeddings.proto\x12\x11gnina_autoencoder\"K\n\x06ligand\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x15\n\tembedding\x18\x02 \x03(\x02\x42\x02\x10\x01\x12\x12\n\x05label\x18\x03 \x01(\x05H\x00\x88\x01\x01\x42\x08\n\x06_label\"B\n\x07protein\x12\x0c\n\x04path\x18\x01 \x01(\t\x12)\n\x06ligand\x18\x02 \x03(\x0b\x32\x19.gnina_autoencoder.ligandb\x06proto3'
 )
 
 
@@ -47,6 +47,13 @@ _LIGAND = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=b'\020\001', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='label', full_name='gnina_autoencoder.ligand.label', index=2,
+      number=3, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -58,9 +65,14 @@ _LIGAND = _descriptor.Descriptor(
   syntax='proto3',
   extension_ranges=[],
   oneofs=[
+    _descriptor.OneofDescriptor(
+      name='_label', full_name='gnina_autoencoder.ligand._label',
+      index=0, containing_type=None,
+      create_key=_descriptor._internal_create_key,
+    fields=[]),
   ],
   serialized_start=45,
-  serialized_end=90,
+  serialized_end=120,
 )
 
 
@@ -98,10 +110,13 @@ _PROTEIN = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=92,
-  serialized_end=158,
+  serialized_start=122,
+  serialized_end=188,
 )
 
+_LIGAND.oneofs_by_name['_label'].fields.append(
+  _LIGAND.fields_by_name['label'])
+_LIGAND.fields_by_name['label'].containing_oneof = _LIGAND.oneofs_by_name['_label']
 _PROTEIN.fields_by_name['ligand'].message_type = _LIGAND
 DESCRIPTOR.message_types_by_name['ligand'] = _LIGAND
 DESCRIPTOR.message_types_by_name['protein'] = _PROTEIN
