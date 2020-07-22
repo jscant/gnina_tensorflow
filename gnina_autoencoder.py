@@ -32,18 +32,6 @@ def grab_class_definition():
                 if line.startswith('if __name__ =='):
                     return defn
                 defn += line
-            
-
-def scatter(img, channel=None):
-    """Scatter plot with markersize proportional to matrix entry."""
-    if channel is not None:
-        img = img[channel, :, :, :]
-    img = img.squeeze()
-    xlin, ylin, zlin = tuple([np.arange(-11.5, 12.5, 0.5)])*3
-    x, y, z = np.meshgrid(xlin, ylin, zlin)
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x, y, z, s=img)
 
 
 def calculate_embeddings(encoder, input_tensor, data_root, types_file,
