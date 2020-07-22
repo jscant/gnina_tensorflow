@@ -44,6 +44,8 @@ def main():
     '--use_cpu', '-g', action='store_true')
     parser.add_argument(
         '--use_densenet_bc', action='store_true')
+    parser.add_argument(
+        '--inference_on_training_set', action='store_true')
     args = parser.parse_args()
 
     # We need to train or test
@@ -88,6 +90,7 @@ def main():
     config_args['use_cpu'] = args.use_cpu
     config_args['use_densenet_bc'] = args.use_densenet_bc
     config_args['random_seed'] = seed
+    config_args['inference_on_training_set'] = args.inference_on_training_set
     beautify_config(config_args)
     
     if args.use_cpu:
@@ -163,6 +166,11 @@ def main():
         model_str))
     plt.savefig(os.path.join(savepath, 'densefs_loss.png'))
     print('Finished {}\n\n'.format(model_str))
+    
+    # Perform inference on training set if required
+    if args.inference_on_training_set:
+        inference(model, train_types, data_root, savepath, batch_size,
+                  gmaker, input_tensor, labels)
 
     # Perform inference if test types file is provided
     if test_types is not None:
