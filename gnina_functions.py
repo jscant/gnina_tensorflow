@@ -10,8 +10,7 @@ import time
 import datetime
 
 class Timer:
-    """
-    Simple timer class.
+    """Simple timer class.
 
     To time a block of code, wrap it like so:
 
@@ -29,6 +28,17 @@ class Timer:
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
+
+
+def extract_filename(path, include_extension=False):
+    """Extracts filename from full path.
+    
+    Arguments:
+        path: File path
+        include_extension: When true, include text after last '.' in filename
+    """
+    filename = path.split('/')[-1]
+    return filename if include_extension else filename.split('.')[0]
 
 
 def beautify_config(config, fname=None):
