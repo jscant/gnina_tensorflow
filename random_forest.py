@@ -15,14 +15,15 @@ for the expressiveness of the penultimate layer of a trained gnina model.
 
 import argparse
 import glob
-import os
 import gnina_embeddings_pb2
 import joblib
 import numpy as np
+import os
+import pathlib
 
 from collections import deque
-from sklearn.ensemble import RandomForestClassifier
 from gnina_functions import Timer, extract_filename
+from sklearn.ensemble import RandomForestClassifier
 
 
 def get_embeddings_arr(directory):
@@ -77,6 +78,7 @@ def main(args):
             'Please specify either train_dir, test_dir, or both')
         
     save_path = os.path.abspath(args.save_path)
+    pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
     if args.model_file is None and args.train_dir is not None:
         embeddings_arr, labels, _ = get_embeddings_arr(args.train_dir)
         print('Embeddings sucessfully extracted')
