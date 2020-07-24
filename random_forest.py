@@ -50,12 +50,12 @@ def get_embeddings_arr(directory):
             os.path.join(directory, '*.bin'))):
         encodings = gnina_embeddings_pb2.protein()
         encodings.ParseFromString(open(filename, 'rb').read())
-        target_path = encodings.target_path
+        target_path = encodings.path
         for ligand_struct in encodings.ligand:
             label = ligand_struct.label
             embeddings.append(np.array(ligand_struct.embedding))
             labels.append(label)
-            ligand_path = encodings.ligand_path
+            ligand_path = ligand_struct.path
             paths.append((target_path, ligand_path))
     path_dict = { idx : path_tup for idx, path_tup in enumerate(paths) }
     return np.array(embeddings), np.array(labels), path_dict
@@ -109,7 +109,7 @@ def main(args):
     test_predictions = classifier.predict_proba(test_embeddings)
     
     # Write inference results to disk in the standard gnina format
-    predictions_filename = os.path.join('savepath', 'predictions_{}'.format(
+    predictions_filename = os.path.join(save_path, 'predictions_{}'.format(
         extract_filename(args.test_dir, include_extension=False)))
     
     with open(predictions_filename, 'w') as f:
