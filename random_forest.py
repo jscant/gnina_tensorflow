@@ -117,7 +117,7 @@ def main(args):
     
     predictions_output = ''
     for idx in range(len(test_predictions)):
-        pred = test_predictions[idx]
+        pred = test_predictions[idx][1]
         true = test_labels[idx]
         rec, lig = paths[idx]
         predictions_output += '{0} | {1:0.7f} {2} {3}\n'.format(
