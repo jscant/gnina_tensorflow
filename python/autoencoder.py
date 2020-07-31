@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Sat Jun 20 12:30:08 2020
 
@@ -274,14 +272,4 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         super(DenseAutoEncoder, self).__init__(
             optimiser, lr, momentum
-        )    
-
-
-if __name__ == '__main__':
-    from contextlib import redirect_stdout
-    tf.keras.backend.clear_session()
-    d = DenseAutoEncoder((28, 48, 48, 48), encoding_size=100)
-    
-    with open('file_2.model', 'w') as f:
-        with redirect_stdout(f):
-            d.summary()
+        )

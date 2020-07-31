@@ -6,7 +6,7 @@ Created on Tue Jun 16 19:46:06 2020
 @brief: Main script for training and inference with gnina-based neural
 networks (https://github.com/gnina/gnina) .
 
-Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.x
+Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 """
 
 import argparse

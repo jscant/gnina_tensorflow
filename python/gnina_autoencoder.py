@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Tue Jun 23 14:45:32 2020
 
 @author: scantleb
+@brief: Main script for using an autoencoder to reduce the dimensionality of
+gnina inputs.
 """
 
 import argparse
@@ -21,7 +21,8 @@ from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 
 
-def grab_class_definition():
+def _grab_class_definition():
+    """For development purposes."""
     defn = ''
     record = False
     with open('autoencoder.py', 'r') as f:
@@ -51,7 +52,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
 
     Returns:
         Dictionary of serialised protein protobuf messages with structure
-        defined in gnina_embeddings.proto. Sturcture is:
+        defined in gnina_embeddings.proto. Structure is:
             
             {receptor_path : serialised_protobuf_messages (1 per ligand)}
     """
@@ -287,7 +288,7 @@ def main():
     with open(os.path.join(savepath, 'config'), 'w') as f:
         f.write(arg_str)
     with open(os.path.join(savepath, 'ae_class_definition'), 'w') as f:
-        f.write(grab_class_definition())
+        f.write(_grab_class_definition())
         
     tf.keras.backend.clear_session()
 

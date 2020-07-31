@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Fri Jul 10 14:47:44 2020
 
 @author: scantleb
+@brief: Utility functions for use in various machine learning models
 """
 
 import time
@@ -42,8 +41,7 @@ def extract_filename(path, include_extension=False):
 
 
 def beautify_config(config, fname=None):
-    """
-    Formats dictionary into two columns, sorted in alphabetical order.
+    """Formats dictionary into two columns, sorted in alphabetical order.
 
     Arguments:
         config: any dictionary
@@ -71,8 +69,7 @@ def beautify_config(config, fname=None):
 
 
 def get_test_info(test_file):
-    """
-    Obtains information about gninatypes file.
+    """Obtains information about gninatypes file.
 
     Arguments:
         test_file: text file containing labels and paths to gninatypes files
@@ -94,8 +91,7 @@ def get_test_info(test_file):
 
 def process_batch(model, example_provider, gmaker, input_tensor,
                   labels_tensor=None, train=True):
-    """
-    Feeds forward and backpropagates (if train==True) batch of examples.
+    """Feeds forward and backpropagates (if train==True) batch of examples.
 
     Arguments:
         model: compiled tensorflow model

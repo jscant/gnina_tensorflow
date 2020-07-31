@@ -1,12 +1,20 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Fri Jul 10 14:09:49 2020
 
 @author: scantleb
+@brief: Uses trained gnina model to predict class labels for docked structures.
+
+Uses a trained gnina-based keras model to perform inference on a set of
+gninatypes gnina inputs, writing the results to disk. The types file is a
+text file with lines of the format:
+    <label> <receptor_gninatypes_file> <ligand_gninatypes_file>
+where <label> is either 0 or 1 (if known) or -1 (if not known), and the
+gninatypes files are generated using the gninatyper module of the original
+gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
+import gnina_embeddings_pb2
 import os
 import torch
 import molgrid
@@ -14,10 +22,8 @@ import pathlib
 import tensorflow as tf
 
 from collections import defaultdict
-
 from gnina_functions import get_test_info, Timer, process_batch
 from autoencoder import AutoEncoderBase as ab
-import gnina_embeddings_pb2
 
 
 def inference(model, test_types, data_root, savepath, batch_size,
