@@ -8,11 +8,17 @@ Created on Fri Jul 31 15:10:59 2020
 import torch
 import molgrid
 import numpy as np
+import pytest
 
 from utilities.gnina_functions import get_test_info, process_batch
-from classifier.model_definitions import define_baseline_model, define_densefs_model
+from classifier.model_definitions import define_baseline_model
 
 def test_get_test_info():
+    """Unit test for get_test_info
+    
+    Correct size of data set obtained.
+    Indices match with line numbers in types file.
+    """
     test_fname = 'data/small_chembl_test.types'
     paths, size = get_test_info(test_fname)
     assert size == 510
@@ -22,9 +28,14 @@ def test_get_test_info():
             assert paths[idx][1] == line.split()[2]
     
 def test_process_batch():
-
+    """Unit test for process_batch
+    
+    Class probabilities returned should sum to 1.
+    Number of labels, predictions and embeddings should equal batch_size.
+    Predictions should have the shape (batch_size, 2).
+    """
     train_types = 'data/small_chembl_test.types'
-    batch_size = 1
+    batch_size = 4
     
     e = molgrid.ExampleProvider(
         data_root='data', balanced=False, shuffle=False)
@@ -37,8 +48,18 @@ def test_process_batch():
     labels = molgrid.MGrid1f(batch_size)
     input_tensor = molgrid.MGrid5f(*tensor_shape)
     
-    model = define_densefs_model(dims)    
+    model = define_baseline_model(dims)    
     
-    res = process_batch(model, e, gmaker, input_tensor, labels, train=False)
-    assert len(res) == 510
-    assert isinstance(res, np.ndarray)
+    y_true, outputs = process_batch(
+        model, e, gmaker, input_tensor, labels, train=False)
+    
+    y_pred, final_layer = outputs
+    
+    assert len(y_true) == 4
+    assert y_pred.shape == (batch_size, 2)
+    n_embeddings, _ = final_layer.shape
+    assert n_embeddings == batch_size
+    
+    y_pred_sums = np.sum(y_pred, axis=1)
+    
+    assert y_pred_sums == pytest.approx(1.0)
