@@ -12,15 +12,14 @@ for the expressiveness of the penultimate layer of a trained gnina model.
 
 
 import argparse
-import glob
 import gnina_embeddings_pb2
 import joblib
 import numpy as np
 import os
-import pathlib
+from pathlib import Path
 
 from collections import deque
-from gnina_functions import Timer, extract_filename
+from gnina_functions import Timer
 from sklearn.ensemble import RandomForestClassifier
 
 
@@ -44,8 +43,8 @@ def get_embeddings_arr(directory):
     embeddings = deque()
     labels = deque()
     paths = deque()
-    for idx, filename in enumerate(glob.iglob(
-            os.path.join(directory, '*.bin'))):
+    
+    for idx, filename in enumerate(Path(directory).glob('*.bin')):
         encodings = gnina_embeddings_pb2.protein()
         encodings.ParseFromString(open(filename, 'rb').read())
         target_path = encodings.path
@@ -75,8 +74,8 @@ def main(args):
         raise RuntimeError(
             'Please specify either train_dir, test_dir, or both')
         
-    save_path = os.path.abspath(args.save_path)
-    pathlib.Path(save_path).mkdir(parents=True, exist_ok=True)
+    save_path = Path(args.save_path).resolve()
+    save_path.mkdir(parents=True, exist_ok=True)
     if args.model_file is None and args.train_dir is not None:
         embeddings_arr, labels, _ = get_embeddings_arr(args.train_dir)
         print('Embeddings sucessfully extracted')
@@ -87,7 +86,7 @@ def main(args):
             classifier.fit(embeddings_arr, labels)
         print('Training complete in {0:0.3f} s'.format(t.interval))
     
-        model_filename = os.path.join(save_path, 'classifier.joblib')
+        model_filename = save_path / 'classifier.joblib'
         joblib.dump(classifier, model_filename, compress=0)
         print('Model saved as joblib object to {}'.format(model_filename))
         
@@ -95,7 +94,7 @@ def main(args):
         # count to zero (these arrays are large)
         del embeddings_arr, labels
     elif args.model_file is not None: # Load model file from disk
-        classifier = joblib.load(os.path.abspath(args.model_file))
+        classifier = joblib.load(str(Path(args.model_file).resolve()))
         print('Sucessfully loaded model from file: {}'.format(args.model_file))
     
     if args.test_dir is None: # Train only
@@ -107,8 +106,8 @@ def main(args):
     test_predictions = classifier.predict_proba(test_embeddings)
     
     # Write inference results to disk in the standard gnina format
-    predictions_filename = os.path.join(save_path, 'predictions_{}'.format(
-        extract_filename(args.test_dir, include_extension=False)))
+    predictions_filename = save_path / 'predictions_{}.txt'.format(
+        Path(args.test_dir).stem)
     
     with open(predictions_filename, 'w') as f:
         f.write('')

@@ -12,13 +12,13 @@ import torch
 import molgrid
 import numpy as np
 import os
-import pathlib
 import time
 import tensorflow as tf
 
 from autoencoder import DenseAutoEncoder
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
+from pathlib import Path
 
 
 def _grab_class_definition():
@@ -68,7 +68,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
 
     # Setup for gnina
     batch_size = input_tensor.shape[0]
-    e = molgrid.ExampleProvider(data_root=data_root, balanced=False,
+    e = molgrid.ExampleProvider(data_root=str(data_root), balanced=False,
                                 shuffle=False)
     e.populate(types_file)
     gmaker = molgrid.GridMaker()
@@ -131,10 +131,10 @@ def pickup(path, autoencoder_class):
         as well as a dictionary containing the command line arguments taken
         from the config file used to produce the saved model.
     """
-    path = os.path.abspath(path)
-    config_path = '/'.join([d for d in path.split('/')[:-2]])
-    config_file = os.path.join(config_path, 'config')
-    if not os.path.isfile(config_file):
+    path = Path(path).resolve()
+    config_path = path.parents[2]
+    config_file = config_path / 'config'
+    if not config_file.exists():
         raise RuntimeError(
             "No config file found in experiment's base directory ({})".format(
                 config_path))
@@ -242,9 +242,9 @@ def main():
         'adam': tf.keras.optimizers.Adam
     }
 
-    data_root = os.path.abspath(args.data_root) if len(
+    data_root = Path(args.data_root).resolve() if len(
         args.data_root) else ''
-    train_types = os.path.abspath(args.train)
+    train_types = Path(args.train).resolve()
     batch_size = args.batch_size
     iterations = args.iterations
     save_interval = args.save_interval
@@ -254,15 +254,12 @@ def main():
     
     slurm_job_id = os.getenv('SLURM_JOB_ID')
     if isinstance(slurm_job_id, str):
-        slurm_log_file = os.path.join(
-            '~/slurm_logs', 'slurm_{}.out'.format(slurm_job_id))
+        slurm_log_file = Path.home() / 'slurm_{}.out'.format(slurm_job_id)
         arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
             slurm_job_id, slurm_log_file)
-        savepath = os.path.abspath(
-                os.path.join(args.save_path, slurm_job_id))
+        savepath = Path(args.save_path, slurm_job_id).resolve()
     else:
-        savepath = os.path.abspath(
-            os.path.join(args.save_path, str(int(time.time()))))
+        savepath = Path(args.save_path, str(int(time.time()))).resolve()
     
     try:
         optimiser = optimisers[args.optimiser.lower()]
@@ -273,28 +270,24 @@ def main():
         args.optimiser.lower() not in ['sgd', 'rmsprop']):
         raise RuntimeError(
             'Momentum only used for RMSProp and SGD optimisers.')
-    if not os.path.isfile(args.train):
+    if not Path(args.train).exists():
         raise RuntimeError('{} does not exist.'.format(args.train))
         
-    pathlib.Path(savepath).mkdir(parents=True, exist_ok=True)
-    pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
-        parents=True, exist_ok=True)
+    Path(savepath, 'checkpoints').mkdir(parents=True, exist_ok=True)
     
-    arg_str += '\nabsolute_save_path {}\n'.format(os.path.abspath(
-            savepath))
-    
+    arg_str += '\nabsolute_save_path {}\n'.format(savepath)
     print(arg_str)
         
-    with open(os.path.join(savepath, 'config'), 'w') as f:
+    with open(savepath / 'config', 'w') as f:
         f.write(arg_str)
-    with open(os.path.join(savepath, 'ae_class_definition'), 'w') as f:
+    with open(savepath / 'ae_class_definition.txt', 'w') as f:
         f.write(_grab_class_definition())
         
     tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
-        data_root=data_root, balanced=False, shuffle=True)
+        data_root=str(data_root), balanced=False, shuffle=True)
     e.populate(train_types)
 
     gmaker = molgrid.GridMaker()
@@ -309,23 +302,19 @@ def main():
         ae = DenseAutoEncoder(dims, encoding_size=encoding_size,
                               optimiser=optimiser, lr=lr, momentum=momentum)
     ae.summary()
-    tf.keras.utils.plot_model(ae, os.path.join(savepath, 'model.png'),
-               show_shapes=True)
+    tf.keras.utils.plot_model(ae, savepath / 'model.png', show_shapes=True)
 
     loss_log = 'Iteration Composite Nonzero Zero\n'
     print('Starting training cycle...')
-    print('Working directory: {}'.format(os.path.abspath(savepath)))
+    print('Working directory: {}'.format(savepath))
     loss_ratio = 0.5
     for iteration in range(iterations):
-        if iteration == iterations - 1:
-            checkpoint_path = os.path.join(
-                savepath, 'checkpoints', 'final_model_{}'.format(
-                    iteration + 1))
-            ae.save(checkpoint_path)
-        elif not (iteration + 1) % save_interval:
-            checkpoint_path = os.path.join(
-                savepath, 'checkpoints', 'ckpt_model_{}'.format(
-                    iteration + 1))
+        if not (iteration + 1) % save_interval and iteration < iterations - 1:
+            checkpoint_path = Path(
+                savepath,
+                'checkpoints',
+                'ckpt_model_{}'.format(iteration + 1)
+                )
             ae.save(checkpoint_path)
             
         batch = e.next_batch(batch_size)
@@ -347,13 +336,18 @@ def main():
         print(loss_str + '\t{0:0.3f}'.format(loss_ratio))
         loss_log += loss_str + '\n'
         if not iteration % 10:
-            with open(os.path.join(savepath, 'loss_log'), 'w') as f:
+            with open(savepath / 'loss_log.txt', 'w') as f:
                 f.write(loss_log[:-1])
         
         zero_losses.append(zero_mse)
         nonzero_losses.append(nonzero_mse)
         losses.append(loss['loss'])
     print('Finished training.')
+    
+    # Save final trained autoencoder
+    checkpoint_path = Path(
+        savepath, 'checkpoints', 'final_model_{}'.format(iterations))
+    ae.save(checkpoint_path)
 
     # Plot zero, nonzero mse
     fig, ax1 = plt.subplots()
@@ -371,7 +365,7 @@ def main():
         axes[idx].set_ylabel('Loss')
         lines.append(line)
     ax1.legend(lines, [line.get_label() for line in lines])
-    fig.savefig(os.path.join(savepath, 'zero_nonzero_losses.png'))
+    fig.savefig(savepath / 'zero_nonzero_losses.png')
     
     # Plot composite mse
     fig, ax1 = plt.subplots()
@@ -383,17 +377,17 @@ def main():
         axes[idx].plot(np.arange(len(losses))*gap, losses)
         axes[idx].set_ylabel('Loss')
     ax1.legend(['composite_mse'])
-    fig.savefig(os.path.join(savepath, 'composite_loss.png'))
+    fig.savefig(savepath /'composite_loss.png')
         
     # Save encodings in serialised format
     print('Saving encodings...')
-    pathlib.Path(os.path.join(savepath, 'encodings')).mkdir(exist_ok=True,
-                                                            parents=True)
+    encodings_dir = savepath / 'encodings'
+    encodings_dir.mkdir(exist_ok=True, parents=True)
     serialised_encodings = calculate_embeddings(
         ae, input_tensor, data_root, train_types)
     for receptor_path, ligands in serialised_encodings.items():
         fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-        with open(os.path.join(savepath, 'encodings', fname), 'wb') as f:
+        with open(encodings_dir / fname, 'wb') as f:
             f.write(ligands)
 
 

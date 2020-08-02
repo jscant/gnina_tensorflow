@@ -11,13 +11,11 @@ dimensional space, as well as the inverse.
 
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
-    MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization, \
-        GlobalMaxPooling3D
+    MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 from operator import mul
 from functools import reduce
 from model_definitions import tf_transition_block,\
     tf_inverse_transition_block, tf_dense_block
-import os
 
 
 class AutoEncoderBase(tf.keras.Model):

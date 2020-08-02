@@ -15,7 +15,7 @@ import torch
 import molgrid
 import numpy as np
 import os
-import pathlib
+from pathlib import Path
 import time
 
 
@@ -29,7 +29,7 @@ def main():
     # Create and parse command line args
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", type=str, required=False,
-                        default=pathlib.Path.home())
+                        default=Path.home())
     parser.add_argument("--train", type=str, required=False)
     parser.add_argument('--test', type=str, required=False)
     parser.add_argument('--densefs', '-d', action='store_true')
@@ -56,13 +56,13 @@ def main():
         # Check if types files exist
         for fname in [types for types in [args.train, args.test]
                       if types is not None]:
-            if not os.path.isfile(fname):
+            if not Path(fname).exists():
                 raise RuntimeError('{} does not exist.'.format(fname))
 
     config_args = {}
 
-    data_root = os.path.abspath(args.data_root)
-    train_types = os.path.abspath(args.train)
+    data_root = Path(args.data_root).resolve()
+    train_types = Path(args.train).resolve()
     test_types = args.test
     use_densefs = args.densefs
     batch_size = args.batch_size
@@ -71,8 +71,8 @@ def main():
     folder = os.getenv('SLURM_JOB_ID')
     if not isinstance(folder, str):
         folder = str(int(time.time()))
-    savepath = os.path.abspath(
-        os.path.join(args.save_path, folder))
+    
+    savepath = Path(args.save_path, folder).resolve()
     save_interval = args.save_interval
     
     seed = np.random.randint(0, int(1e7))
@@ -113,8 +113,8 @@ def main():
     labels = molgrid.MGrid1f(batch_size)
     input_tensor = molgrid.MGrid5f(*tensor_shape)
 
-    pathlib.Path(os.path.join(savepath, 'checkpoints')).mkdir(
-        parents=True, exist_ok=True)
+    checkpoints_dir = savepath / 'checkpoints'
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
     # We are ready to define our model and train
     losses = []
@@ -124,17 +124,20 @@ def main():
         model = define_baseline_model(dims)
 
     model_str = ['Baseline', 'DenseFS'][use_densefs]
-    plot_model(model, os.path.join(savepath, 'model.png'),
-               show_shapes=True)
-    beautify_config(config_args, os.path.join(savepath, 'config'))
+    plot_model(model, savepath / 'model.png', show_shapes=True)
+    beautify_config(config_args, savepath / 'config')
     model.summary()
 
     losses_string = ''
+    loss_history_fname = Path(
+        savepath, 'loss_history_{}.txt'.format(model_str.lower()))
     for iteration in range(iterations):
-        if iteration == iterations - 1:
-            checkpoint_path = os.path.join(
-                savepath, 'checkpoints', 'final_model_{}'.format(
-                    iteration + 1))
+        if not (iteration + 1) % save_interval and iteration < iterations - 1:
+            checkpoint_path = Path(
+                savepath,
+                'checkpoints',
+                'ckpt_model_{}'.format(iteration + 1))
+            
             model.save(checkpoint_path)
         
         # Data: e > gmaker > input_tensor > network (forward and backward pass)
@@ -146,15 +149,13 @@ def main():
             loss = loss[0]
         losses.append(loss)
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
-        with open(os.path.join(savepath, 'loss_history_{}.txt'.format(
-                model_str.lower())), 'w') as f:
+        with open(loss_history_fname, 'w') as f:
             f.write(losses_string)
         print(iteration, 'loss: {0:0.3f}'.format(loss))
 
     # Save model for later inference
-    checkpoint_path = os.path.join(
-        savepath, 'checkpoints', 'ckpt_model_{}'.format(
-            iteration + 1))
+    checkpoint_path = savepath / 'checkpoints' / 'final_model_{}'.format(
+            iterations)
     model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
@@ -164,7 +165,7 @@ def main():
     plt.legend([model_str])
     plt.title('Cross-entropy loss history for {} network'.format(
         model_str))
-    plt.savefig(os.path.join(savepath, 'densefs_loss.png'))
+    plt.savefig(savepath / 'densefs_loss.png')
     print('Finished {}\n\n'.format(model_str))
     
     # Perform inference on training set if required

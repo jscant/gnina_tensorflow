@@ -29,17 +29,6 @@ class Timer:
         self.interval = self.end - self.start
 
 
-def extract_filename(path, include_extension=False):
-    """Extracts filename from full path.
-    
-    Arguments:
-        path: File path
-        include_extension: When true, include text after last '.' in filename
-    """
-    filename = path.split('/')[-1]
-    return filename if include_extension else filename.split('.')[0]
-
-
 def beautify_config(config, fname=None):
     """Formats dictionary into two columns, sorted in alphabetical order.
 

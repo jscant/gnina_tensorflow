@@ -15,10 +15,9 @@ gnina fork (https://github.com/gnina/gnina).
 
 import argparse
 import gnina_embeddings_pb2
-import os
 import torch
 import molgrid
-import pathlib
+from pathlib import Path
 import tensorflow as tf
 
 from collections import defaultdict
@@ -50,8 +49,10 @@ def inference(model, test_types, data_root, savepath, batch_size,
         labels: molgrid.MGrid1f object where predictions are stored for each
             batch.      
     """
-    predictions_output = os.path.join(savepath, 'predictions_{}.txt'.format(
-            test_types.split('/')[-1].split('.')[0]))
+    savepath = Path(savepath).resolve() # in case this is a string
+    test_types_stem = Path(test_types).stem
+    predictions_fname = 'predictions_{}.txt'.format(test_types_stem)
+    predictions_fname = savepath / predictions_fname
     
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
     e_test = molgrid.ExampleProvider(
@@ -72,15 +73,14 @@ def inference(model, test_types, data_root, savepath, batch_size,
         labels = molgrid.MGrid1f(batch_size)
         
     # Make output directories
-    embeddings_dir = os.path.join(savepath, 'encodings_{}'.format(
-            test_types.split('/')[-1].split('.')[0]))
-    pathlib.Path(embeddings_dir).mkdir(parents=True, exist_ok=True)
+    embeddings_dir = savepath / 'encodings_{}'.format(test_types_stem)
+    embeddings_dir.mkdir(parents=True, exist_ok=True)
 
     print('Performing inference on {} examples'.format(size))
     representations_dict = defaultdict(dict)
     labels_dict = defaultdict(dict)
     test_output_string = ''
-    with open(predictions_output, 'w') as f:
+    with open(predictions_fname, 'w') as f:
         f.write('')
         
     with Timer() as t:
@@ -104,7 +104,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
                     paths[index][1]
                 )
             if not iteration % 1000:
-                with open(predictions_output, 'a') as f:
+                with open(predictions_fname, 'a') as f:
                     f.write(test_output_string)
                 test_output_string = ''
 
@@ -127,7 +127,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
                 paths[index][0],
                 paths[index][1]
             )
-        with open(predictions_output, 'a') as f:
+        with open(predictions_fname, 'a') as f:
             f.write(test_output_string[:-1])
 
 
@@ -147,8 +147,8 @@ def inference(model, test_types, data_root, savepath, batch_size,
         serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()    
     
     for receptor_path, ligands in serialised_embeddings.items():
-        fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-        with open(os.path.join(embeddings_dir, fname), 'wb') as f:
+        fname = Path(receptor_path).stem + '.bin'
+        with open(embeddings_dir / fname, 'wb') as f:
             f.write(ligands)
 
 
