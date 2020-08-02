@@ -70,7 +70,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     batch_size = input_tensor.shape[0]
     e = molgrid.ExampleProvider(data_root=str(data_root), balanced=False,
                                 shuffle=False)
-    e.populate(types_file)
+    e.populate(str(types_file))
     gmaker = molgrid.GridMaker()
 
     # Need a dictionary mapping {rec : deque([(idx, lig), ...])} where idx
