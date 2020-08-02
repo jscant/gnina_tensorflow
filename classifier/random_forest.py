@@ -10,17 +10,16 @@ are used to train and test a random forest. This is intended as a sanity check
 for the expressiveness of the penultimate layer of a trained gnina model.
 """
 
-
 import argparse
-import gnina_embeddings_pb2
 import joblib
 import numpy as np
 import os
-from pathlib import Path
 
 from collections import deque
-from gnina_functions import Timer
+from pathlib import Path
 from sklearn.ensemble import RandomForestClassifier
+from utilities import gnina_embeddings_pb2
+from utilities.gnina_functions import Timer
 
 
 def get_embeddings_arr(directory):

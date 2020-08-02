@@ -14,7 +14,7 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 from operator import mul
 from functools import reduce
-from model_definitions import tf_transition_block,\
+from classifier.model_definitions import tf_transition_block,\
     tf_inverse_transition_block, tf_dense_block
 
 

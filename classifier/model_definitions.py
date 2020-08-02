@@ -22,9 +22,7 @@ import tensorflow.keras as keras
 from tensorflow.python.keras import backend, layers
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense,\
     MaxPooling3D, BatchNormalization, Concatenate, GlobalMaxPooling3D,\
-        UpSampling3D, Reshape, Conv3DTranspose
-from operator import mul
-from functools import reduce
+        UpSampling3D
 
 
 def define_baseline_model(dims):

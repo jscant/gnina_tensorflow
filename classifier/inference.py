@@ -14,15 +14,15 @@ gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
-import gnina_embeddings_pb2
 import torch
 import molgrid
-from pathlib import Path
 import tensorflow as tf
 
+from autoencoder.autoencoder import AutoEncoderBase as ab
 from collections import defaultdict
-from gnina_functions import get_test_info, Timer, process_batch
-from autoencoder import AutoEncoderBase as ab
+from pathlib import Path
+from utilities import gnina_embeddings_pb2
+from utilities.gnina_functions import get_test_info, Timer, process_batch
 
 
 def inference(model, test_types, data_root, savepath, batch_size,

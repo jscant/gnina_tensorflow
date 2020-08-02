@@ -7,7 +7,7 @@ gnina inputs.
 """
 
 import argparse
-import gnina_embeddings_pb2
+
 import torch
 import molgrid
 import numpy as np
@@ -15,10 +15,11 @@ import os
 import time
 import tensorflow as tf
 
-from autoencoder import DenseAutoEncoder
+from autoencoder.autoencoder import DenseAutoEncoder
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 from pathlib import Path
+from utilities import gnina_embeddings_pb2
 
 
 def _grab_class_definition():

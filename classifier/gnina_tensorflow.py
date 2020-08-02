@@ -15,15 +15,14 @@ import torch
 import molgrid
 import numpy as np
 import os
-from pathlib import Path
 import time
 
-
-from model_definitions import define_baseline_model, define_densefs_model
-from gnina_functions import process_batch, beautify_config
-
-from tensorflow.keras.utils import plot_model
 from inference import inference
+from model_definitions import define_baseline_model, define_densefs_model
+from utilities.gnina_functions import process_batch, beautify_config
+from pathlib import Path
+from tensorflow.keras.utils import plot_model
+
 
 def main():
     # Create and parse command line args
