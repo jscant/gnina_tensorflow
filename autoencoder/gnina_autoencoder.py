@@ -7,13 +7,12 @@ gnina inputs.
 """
 
 import argparse
-
 import torch
 import molgrid
 import numpy as np
 import os
-import time
 import tensorflow as tf
+import time
 
 from autoencoder.autoencoder import DenseAutoEncoder
 from collections import defaultdict, deque
@@ -26,7 +25,7 @@ def _grab_class_definition():
     """For development purposes."""
     defn = ''
     record = False
-    with open('autoencoder.py', 'r') as f:
+    with open(Path(__file__).parent / 'autoencoder.py', 'r') as f:
         for line in f.readlines():
             if not record and line.startswith('class DenseAutoEncoder(A'):
                 record = True
@@ -34,7 +33,7 @@ def _grab_class_definition():
                 if line.startswith('if __name__ =='):
                     return defn
                 defn += line
-
+    return defn
 
 def calculate_embeddings(encoder, input_tensor, data_root, types_file,
                          rotate=False):
@@ -289,7 +288,7 @@ def main():
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
         data_root=str(data_root), balanced=False, shuffle=True)
-    e.populate(train_types)
+    e.populate(str(train_types))
 
     gmaker = molgrid.GridMaker()
     dims = gmaker.grid_dimensions(e.num_types())
