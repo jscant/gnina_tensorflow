@@ -21,7 +21,7 @@ from classifier.model_definitions import tf_transition_block,\
 class AutoEncoderBase(tf.keras.Model):
     """Virtual parent class for autoencoders."""
     
-    def __init__(self, optimiser, lr, momentum=0.0):
+    def __init__(self, optimiser, loss, opt_args):
         """Initialisation of base class.
         
         Arguments:
@@ -29,23 +29,27 @@ class AutoEncoderBase(tf.keras.Model):
             lr: learning rate of the optimiser
             momentum: momentum for the optimiser (where applicable)
         """
+        
+        inputs = [self.input_image]
+        if loss == 'composite_mse':
+            self.frac = Input(shape=(1,), dtype=tf.float32)
+            inputs.append(self.frac)
+        
         super(AutoEncoderBase, self).__init__(
-            inputs=[self.input_image, self.frac],
+            inputs=inputs,
             outputs=[self.reconstruction, self.encoding]
         )
 
-        self.add_loss(self.composite_mse(
-            self.input_image, self.reconstruction, self.frac))
-        try:
+        if loss == 'composite_mse':
+            self.add_loss(self.composite_mse(
+                self.input_image, self.reconstruction, self.frac))        
             self.compile(
-                optimizer=optimiser(lr=lr, momentum=momentum),
-         #       loss='mse',
+                optimizer=optimiser(**opt_args),
                 metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
             )
-        except TypeError:
+        else:
             self.compile(
-                optimizer=optimiser(lr=lr),
-         #       loss='mse',
+                optimizer=optimiser(**opt_args), loss=loss,
                 metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
             )
             
@@ -126,11 +130,9 @@ class AutoEncoderBase(tf.keras.Model):
 class AutoEncoder(AutoEncoderBase):
 
     def __init__(self, dims, encoding_size=10,
-                 optimiser=tf.keras.optimizers.SGD, lr=0.01, momentum=0.0):
+                 optimiser=tf.keras.optimizers.SGD, loss='mse', **opt_args):
         """Setup for autoencoder architecture."""
         self.optimiser = optimiser
-        self.lr = lr
-        self.momentum = momentum
         self.dims = dims
         self.encoding_size = encoding_size
         
@@ -197,10 +199,9 @@ class AutoEncoder(AutoEncoderBase):
                                          activation='linear',
                                          data_format='channels_first',
                                          name='reconstruction')(x)
-        self.frac = Input(shape=(1,), dtype=tf.float32)
 
         super(AutoEncoder, self).__init__(
-            optimiser, lr, momentum
+            optimiser, loss, opt_args
         )
 
 
@@ -208,11 +209,9 @@ class DenseAutoEncoder(AutoEncoderBase):
     """Densely connected autoencoder."""
     
     def __init__(self, dims, encoding_size=10,
-                 optimiser=tf.keras.optimizers.SGD, lr=0.01, momentum=0.0):
+                 optimiser=tf.keras.optimizers.SGD, loss='mse', **opt_args):
         """Setup for autoencoder architecture."""
         self.optimiser = optimiser
-        self.lr = lr
-        self.momentum = momentum
         self.dims = dims
         self.encoding_size = encoding_size
         
@@ -235,21 +234,16 @@ class DenseAutoEncoder(AutoEncoderBase):
         # convolution [2]
         x = tf_dense_block(x, 4, "db_3")
         x = tf_transition_block(x, 0.5, "tb_3", final=False)
-        #x = tf_dense_block(x, 4, "db_4")
-        #x = tf_transition_block(x, 0.5, "tb_4", final=True)
         
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
-        #x = GlobalMaxPooling3D(data_format='channels_first')(x)
+        
         self.encoding = Dense(encoding_size, activation='sigmoid',
                          name='encoding')(x)
         
         decoding = Dense(reduce(mul, final_shape[1:]))(self.encoding)
         reshaped = Reshape(final_shape[1:])(decoding)
-        
-        #x = Conv3D(32, 2, activation='relu', padding='SAME', use_bias=False,
-        #           data_format='channels_first')(reshaped)
-        
+                
         x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1')
         x = tf_dense_block(x, 4, 'idb_1')
         
@@ -262,12 +256,10 @@ class DenseAutoEncoder(AutoEncoderBase):
         x = tf_inverse_transition_block(x, 0.5, 'itb_4')
         x = tf_dense_block(x, 4, 'idb_4')
     
-        self.reconstruction = Conv3D(28, 3, activation=self.long_sigmoid,
+        self.reconstruction = Conv3D(dims[0], 3, activation=self.long_sigmoid,
                                 data_format='channels_first', padding='SAME',
                                 name='reconstruction')(x)
         
-        self.frac = Input(shape=(1,), dtype=tf.float32)
-
         super(DenseAutoEncoder, self).__init__(
-            optimiser, lr, momentum
+            optimiser, loss, opt_args
         )
