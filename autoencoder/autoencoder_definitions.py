@@ -195,7 +195,7 @@ class AutoEncoder(AutoEncoderBase):
             moving_mean_initializer=tf.constant_initializer(0.999))(x)
         x = UpSampling3D(
             size=(2, 2, 2), data_format='channels_first')(x)
-        self.reconstruction = Conv3DTranspose(28, 3, padding='SAME',
+        self.reconstruction = Conv3DTranspose(dims[0], 3, padding='SAME',
                                          activation='linear',
                                          data_format='channels_first',
                                          name='reconstruction')(x)
