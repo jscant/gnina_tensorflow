@@ -199,7 +199,6 @@ class AutoEncoder(AutoEncoderBase):
                                          activation='linear',
                                          data_format='channels_first',
                                          name='reconstruction')(x)
-        self.frac = Input(shape=(1,), dtype=tf.float32)
 
         super(AutoEncoder, self).__init__(
             optimiser, loss, opt_args
@@ -235,21 +234,16 @@ class DenseAutoEncoder(AutoEncoderBase):
         # convolution [2]
         x = tf_dense_block(x, 4, "db_3")
         x = tf_transition_block(x, 0.5, "tb_3", final=False)
-        #x = tf_dense_block(x, 4, "db_4")
-        #x = tf_transition_block(x, 0.5, "tb_4", final=True)
         
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
-        #x = GlobalMaxPooling3D(data_format='channels_first')(x)
+        
         self.encoding = Dense(encoding_size, activation='sigmoid',
                          name='encoding')(x)
         
         decoding = Dense(reduce(mul, final_shape[1:]))(self.encoding)
         reshaped = Reshape(final_shape[1:])(decoding)
-        
-        #x = Conv3D(32, 2, activation='relu', padding='SAME', use_bias=False,
-        #           data_format='channels_first')(reshaped)
-        
+                
         x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1')
         x = tf_dense_block(x, 4, 'idb_1')
         
@@ -266,9 +260,6 @@ class DenseAutoEncoder(AutoEncoderBase):
                                 data_format='channels_first', padding='SAME',
                                 name='reconstruction')(x)
         
-        
-        self.frac = Input(shape=(1,), dtype=tf.float32)
-
         super(DenseAutoEncoder, self).__init__(
             optimiser, loss, opt_args
         )
