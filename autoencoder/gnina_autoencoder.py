@@ -14,11 +14,7 @@ import os
 import tensorflow as tf
 import time
 
-<<<<<<< HEAD
 from autoencoder.autoencoder_definitions import SingleLayerAE
-=======
-from autoencoder_definitions import DenseAutoEncoder
->>>>>>> 62f369fe1a91a53df3244b338515ac2ade8f6b7d
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 from pathlib import Path
