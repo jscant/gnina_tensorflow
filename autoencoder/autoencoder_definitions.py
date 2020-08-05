@@ -10,12 +10,14 @@ dimensional space, as well as the inverse.
 
 
 import tensorflow as tf
-from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
-    MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
-from operator import mul
-from functools import reduce
+import numpy as np
+
 from classifier.model_definitions import tf_transition_block,\
     tf_inverse_transition_block, tf_dense_block
+from operator import mul
+from functools import reduce
+from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
+    MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -32,7 +34,7 @@ class AutoEncoderBase(tf.keras.Model):
         
         inputs = [self.input_image]
         if loss == 'composite_mse':
-            self.frac = Input(shape=(1,), dtype=tf.float32)
+            self.frac = Input(shape=(1,), dtype=tf.float32, name='frac')
             inputs.append(self.frac)
         
         super(AutoEncoderBase, self).__init__(
@@ -40,17 +42,21 @@ class AutoEncoderBase(tf.keras.Model):
             outputs=[self.reconstruction, self.encoding]
         )
 
+        metrics={'reconstruction': [self.mae, self.nonzero_mae, self.zero_mae,
+                                    self.zero_mse, self.nonzero_mse]}
         if loss == 'composite_mse':
             self.add_loss(self.composite_mse(
                 self.input_image, self.reconstruction, self.frac))        
             self.compile(
                 optimizer=optimiser(**opt_args),
-                metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
+                metrics=metrics
             )
         else:
             self.compile(
-                optimizer=optimiser(**opt_args), loss=loss,
-                metrics={'reconstruction': [self.zero_mse, self.nonzero_mse]}
+                optimizer=optimiser(**opt_args),
+                loss={'reconstruction': loss,
+                      'encoding': None},
+                metrics=metrics
             )
             
         # Bug with add_loss puts empty dict at the end of model._layers which
@@ -62,6 +68,7 @@ class AutoEncoderBase(tf.keras.Model):
     def long_sigmoid(self, x):
         """2.3 times the sigmoid function."""
         return tf.math.multiply(2.3, tf.nn.sigmoid(x))
+
 
     def nonzero_mse(self, target, reconstruction):
         """Mean squared error for non-zero values in the target matrix
@@ -78,10 +85,9 @@ class AutoEncoderBase(tf.keras.Model):
         """
         mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
         masked_difference = (target - reconstruction) * mask
-        squared_difference = tf.reduce_sum(tf.square(masked_difference))
-        divided_sd = tf.divide(squared_difference, tf.reduce_sum(mask))
-        return tf.sqrt(divided_sd)
+        return tf.reduce_mean(tf.square(masked_difference))
     
+
     def zero_mse(self, target, reconstruction):
         """Mean squared error for zero values in the target matrix
         
@@ -97,10 +103,9 @@ class AutoEncoderBase(tf.keras.Model):
         """
         mask = tf.cast(tf.equal(target, 0), tf.float32)
         masked_difference = (target - reconstruction) * mask
-        squared_difference = tf.reduce_sum(tf.square(masked_difference))
-        divided_sd = tf.divide(squared_difference, tf.reduce_sum(mask))
-        return tf.sqrt(divided_sd)
+        return tf.reduce_mean(tf.square(masked_difference))
     
+
     def composite_mse(self, target, reconstruction, ratio):
         """Weighted mean squared error of nonzero-only and zero-only inputs.
         
@@ -121,11 +126,71 @@ class AutoEncoderBase(tf.keras.Model):
             where nonzero_mse and zero_mse are the MSE for the nonzero and zero
             parts of target respectively.
         """
-        #frac = tf.cast(tf.math.divide(ratio, tf.math.add(1, ratio)), tf.float32)
-        frac = ratio/(1+ratio)
+        frac = tf.divide(ratio, 1+ratio)
         return tf.math.add(
             tf.math.multiply(frac, self.nonzero_mse(target, reconstruction)),
             tf.math.multiply(1-frac, self.zero_mse(target, reconstruction)))
+    
+    def rmse(self, target, reconstruction):
+        """Root mean squared error loss function.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Tensor containing the root mean squared error between the target
+            and the reconstruction.
+        """
+        return tf.sqrt(tf.reduce_mean(tf.square(target - reconstruction)))
+    
+    def mae(self, target, reconstruction):
+        """Mean absolute error loss function.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Tensor containing the mean absolute error between the target and
+            the reconstruction.
+        """
+        return tf.reduce_mean(tf.abs(target - reconstruction))
+    
+    def zero_mae(self, target, reconstruction):
+        """Mean absolute error loss function target values are zero.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Tensor containing the mean absolute error between the target and
+            the reconstruction where the mean is taken over values where
+            the target is equal to zero.
+        """
+        mask = tf.cast(tf.equal(target, 0), tf.float32)
+        masked_diff = (target - reconstruction) * mask
+        abs_diff = tf.abs(masked_diff)
+        return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
+    
+    def nonzero_mae(self, target, reconstruction):
+        """Mean absolute error loss function target values are not zero.
+        
+        Arguments:
+            target: input tensor
+            reconstruction: output tensor of the autoencoder
+            
+        Returns:
+            Tensor containing the mean absolute error between the target and
+            the reconstruction where the mean is taken over values where
+            the target is not zero.
+        """
+        mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
+        masked_diff = (target - reconstruction) * mask
+        abs_diff = tf.abs(masked_diff)
+        return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
+    
 
 class AutoEncoder(AutoEncoderBase):
 
@@ -263,3 +328,24 @@ class DenseAutoEncoder(AutoEncoderBase):
         super(DenseAutoEncoder, self).__init__(
             optimiser, loss, opt_args
         )
+        
+        
+class SingleLayerAE(AutoEncoderBase):
+    """Densely connected autoencoder."""
+    
+    def __init__(self, dims, encoding_size=10,
+                 optimiser=tf.keras.optimizers.SGD, loss='mse', **opt_args):
+        """Setup for autoencoder architecture."""
+        
+        self.input_image = Input(shape=dims, dtype=tf.float32,
+                                 name='input_image')
+        
+        x = Flatten()(self.input_image)
+        self.encoding = Dense(encoding_size, name='encoding', activation='linear')(x)
+        x = Dense(np.prod(dims), activation='sigmoid')(self.encoding)
+        self.reconstruction = Reshape(dims, name='reconstruction')(x)
+
+        super(SingleLayerAE, self).__init__(
+            optimiser, loss, opt_args
+        )
+        

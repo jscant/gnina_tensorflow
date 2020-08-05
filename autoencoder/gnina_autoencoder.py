@@ -14,7 +14,7 @@ import os
 import tensorflow as tf
 import time
 
-from autoencoder.autoencoder import DenseAutoEncoder
+from autoencoder.autoencoder_definitions import SingleLayerAE
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 from pathlib import Path
@@ -25,7 +25,7 @@ def _grab_class_definition():
     """For development purposes."""
     defn = ''
     record = False
-    with open(Path(__file__).parent / 'autoencoder.py', 'r') as f:
+    with open(Path(__file__).parent / 'autoencoder_definitions.py', 'r') as f:
         for line in f.readlines():
             if not record and line.startswith('class DenseAutoEncoder(A'):
                 record = True
@@ -34,6 +34,7 @@ def _grab_class_definition():
                     return defn
                 defn += line
     return defn
+
 
 def calculate_embeddings(encoder, input_tensor, data_root, types_file,
                          rotate=False):
@@ -69,7 +70,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     # Setup for gnina
     batch_size = input_tensor.shape[0]
     e = molgrid.ExampleProvider(data_root=str(data_root), balanced=False,
-                                shuffle=False)
+                                shuffle=True)
     e.populate(str(types_file))
     gmaker = molgrid.GridMaker()
 
@@ -87,7 +88,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     for iteration in range(iterations):
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
-        _, encodings = encoder.predict_on_batch(input_tensor.tonumpy())
+        encodings = encoder.predict_on_batch(input_tensor.tonumpy())
         for batch_idx in range(batch_size):
             global_idx = iteration * batch_size + batch_idx
             embeddings[global_idx] = encodings[batch_idx]
@@ -120,7 +121,7 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
 
 
 def pickup(path, autoencoder_class):
-    """Loads saved keras autoencoder.
+    """Loads saved autoencoder.
     
     Arguments:
         path: location of saved weights and architecture
@@ -197,6 +198,8 @@ def main():
     parser.add_argument(
         '--momentum', type=float, required=False, default=None)
     parser.add_argument(
+        '--loss', type=str, required=False, default='mse')
+    parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--pickup', '-p', type=str, required=False,
@@ -209,7 +212,7 @@ def main():
     load_model = False
     if args.pickup is not None:
         load_model = True
-        ae, loaded_args = pickup(args.pickup, DenseAutoEncoder)
+        ae, loaded_args = pickup(args.pickup, SingleLayerAE)
         args = argparse.Namespace(
             pickup=args.pickup,
             data_root=loaded_args['data_root'],
@@ -228,7 +231,9 @@ def main():
                 else loaded_args['optimiser'],
             save_path=args.save_path,
             use_cpu=args.use_cpu,
+            loss=loaded_args['loss'],
         )
+            
     molgrid.set_gpu_enabled(1-args.use_cpu)
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
@@ -249,6 +254,7 @@ def main():
     iterations = args.iterations
     save_interval = args.save_interval
     encoding_size = args.encoding_size
+    loss_fn = args.loss
     lr = args.learning_rate
     momentum = args.momentum if args.momentum is not None else 0.0
     
@@ -298,16 +304,21 @@ def main():
     # Train autoencoder
     zero_losses, nonzero_losses, losses = [], [], []
     
+    opt_args = {'lr': lr, 'loss': loss_fn}
+    if momentum > 0:
+        opt_args['momentum'] = momentum
+    
     if not load_model:
-        ae = DenseAutoEncoder(dims, encoding_size=encoding_size,
-                              optimiser=optimiser, lr=lr, momentum=momentum)
+        ae = SingleLayerAE(dims, encoding_size=encoding_size,
+                           optimiser=optimiser, **opt_args)
     ae.summary()
-    tf.keras.utils.plot_model(ae, savepath / 'model.png', show_shapes=True)
+    #tf.keras.utils.plot_model(ae, savepath / 'model.png', show_shapes=True)
 
-    loss_log = 'Iteration Composite Nonzero Zero\n'
+    loss_ratio = 1
+    loss_log = 'iteration {} nonzero_mae zero_mae\n'.format(loss_fn)
     print('Starting training cycle...')
     print('Working directory: {}'.format(savepath))
-    loss_ratio = 0.5
+    
     for iteration in range(iterations):
         if not (iteration + 1) % save_interval and iteration < iterations - 1:
             checkpoint_path = Path(
@@ -319,28 +330,42 @@ def main():
             
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
-
-        loss = ae.train_on_batch(
-            [input_tensor.tonumpy()/2.3, tf.constant(loss_ratio, shape=(1,))],
-            {'reconstruction': input_tensor.tonumpy()/2.3},
-            return_dict=True)
-        zero_mse = loss['reconstruction_zero_mse']
-        nonzero_mse = loss['reconstruction_nonzero_mse']
-        if zero_mse > 1e-5:
-            loss_ratio = min(25, nonzero_mse / zero_mse)
-        else:
-            loss_ratio = 25
-        loss_str = '{0}\t{1:0.3f}\t{2:0.3f}\t{3:0.3f}'.format(
-            iteration, loss['loss'], nonzero_mse, zero_mse)
         
-        print(loss_str + '\t{0:0.3f}'.format(loss_ratio))
+        input_tensor_numpy = input_tensor.tonumpy()
+        input_tensor_numpy /= np.amax(input_tensor_numpy)
+        
+        x_inputs = {'input_image': input_tensor_numpy}
+        if loss_fn == 'composite_mse':
+            x_inputs['frac'] = tf.constant(loss_ratio, shape=(1,))
+        
+        loss = ae.train_on_batch(
+            x_inputs,
+            {'reconstruction': input_tensor_numpy},
+            return_dict=True)
+        
+        #pred = ae.predict_on_batch(x_inputs)
+                
+        zero_mae = loss['reconstruction_zero_mae']
+        nonzero_mae = loss['reconstruction_nonzero_mae']
+        if zero_mae > 1e-5:
+            loss_ratio = min(50, nonzero_mae / zero_mae)
+        else:
+            loss_ratio = 50
+            
+        if np.isnan(loss_ratio):
+            loss_ratio = 1
+        
+        loss_str = '{0} {1:0.3f} {2:0.3f} {3:0.3f}'.format(
+            iteration, loss['loss'], nonzero_mae, zero_mae)
+        
+        print(loss_str)
         loss_log += loss_str + '\n'
         if not iteration % 10:
             with open(savepath / 'loss_log.txt', 'w') as f:
                 f.write(loss_log[:-1])
         
-        zero_losses.append(zero_mse)
-        nonzero_losses.append(nonzero_mse)
+        zero_losses.append(zero_mae)
+        nonzero_losses.append(nonzero_mae)
         losses.append(loss['loss'])
     print('Finished training.')
     
@@ -355,7 +380,7 @@ def main():
     ax2 = ax1.twinx()
     axes = [ax1, ax2]
     cols = ['r-', 'b-']
-    labels = ['Zero_MSE', 'Nonzero_MSE']
+    labels = ['Zero_MAE', 'Nonzero_MAE']
     lines = []
     for idx, losses in enumerate([zero_losses, nonzero_losses]):
         gap = 100
@@ -376,7 +401,7 @@ def main():
         losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
         axes[idx].plot(np.arange(len(losses))*gap, losses)
         axes[idx].set_ylabel('Loss')
-    ax1.legend(['composite_mse'])
+    ax1.legend([loss_fn])
     fig.savefig(savepath /'composite_loss.png')
         
     # Save encodings in serialised format
