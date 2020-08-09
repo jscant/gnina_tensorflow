@@ -15,7 +15,8 @@ import os
 import tensorflow as tf
 import time
 
-from autoencoder.autoencoder_definitions import SingleLayerAutoEncoder as AE
+from autoencoder.autoencoder_definitions import AutoEncoderBase, \
+    DenseAutoEncoder, AutoEncoder, SingleLayerAutoEncoder
 from collections import defaultdict, deque
 from matplotlib import pyplot as plt
 from pathlib import Path
@@ -106,12 +107,11 @@ def calculate_embeddings(encoder, input_tensor, data_root, types_file,
     return serialised_embeddings
 
 
-def pickup(path, autoencoder_class):
+def pickup(path):
     """Loads saved autoencoder.
 
     Arguments:
         path: location of saved weights and architecture
-        ae_class: class derived from the AutoEncoderBase class
 
     Returns:
         DenseAutoEncoder object initialised with weights from saved checkpoint,
@@ -150,13 +150,13 @@ def pickup(path, autoencoder_class):
     ae = tf.keras.models.load_model(
         path,
         custom_objects={
-            'zero_mse': autoencoder_class.zero_mse,
-            'nonzero_mse': autoencoder_class.nonzero_mse,
-            'composite_mse': autoencoder_class.composite_mse,
-            'nonzero_mae': autoencoder_class.nonzero_mae,
-            'zero_mae': autoencoder_class.zero_mae,
-            'approx_heaviside': autoencoder_class.approx_heaviside,
-            'unbalanced_loss': autoencoder_class.unbalanced_loss,
+            'zero_mse': AutoEncoderBase.zero_mse,
+            'nonzero_mse': AutoEncoderBase.nonzero_mse,
+            'composite_mse': AutoEncoderBase.composite_mse,
+            'nonzero_mae': AutoEncoderBase.nonzero_mae,
+            'zero_mae': AutoEncoderBase.zero_mae,
+            'approx_heaviside': AutoEncoderBase.approx_heaviside,
+            'unbalanced_loss': AutoEncoderBase.unbalanced_loss,
         }
     )
     # Bug with add_loss puts empty dict at the end of model._layers which
@@ -167,8 +167,15 @@ def pickup(path, autoencoder_class):
     return ae, args
 
 
-def main():
-    # Parse and sanitise command line args
+def parse_command_line_args():
+    """Parse command line args and return as dict.
+    
+    Returns a dictionary containing all args, default or otherwise; if 'pickup'
+    is specified, as many args as are contained in the config file for that
+    (partially) trained model are loaded, otherwise defaults are given.
+    Command line args override args found in the config of model found in
+    'pickup' directory.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
@@ -182,11 +189,15 @@ def main():
     parser.add_argument(
         '--batch_size', '-b', type=int, required=False, default=16)
     parser.add_argument(
+        '--model', '-m', type=str, required=False, default='single',
+        help='Model architecture; one of single (SingleLayerAutoencoder' +
+        '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
+    parser.add_argument(
         '--optimiser', '-o', type=str, required=False, default='sgd')
     parser.add_argument(
         '--learning_rate', '-l', type=float, required=False)
     parser.add_argument(
-        '--momentum', type=float, required=False, default=None)
+        '--momentum', type=float, required=False, default=0.0)
     parser.add_argument(
         '--loss', type=str, required=False, default='mse')
     parser.add_argument(
@@ -203,8 +214,9 @@ def main():
     args = parser.parse_args()
 
     load_model = bool(args.pickup) # False if empty string or NoneType
+    ae = None
     if load_model:
-        ae, loaded_args = pickup(args.pickup, AE)
+        ae, loaded_args = pickup(args.pickup)
         args = argparse.Namespace(
             pickup=args.pickup,
             data_root=loaded_args['data_root'],
@@ -227,66 +239,54 @@ def main():
             binary_mask=loaded_args.get('binary_mask', False),
             final_activation=loaded_args.get('final_activation', 'unknown')
         )
+        
+    args.train_types = Path(args.train).resolve()
+    args.data_root = Path(args.data_root).resolve()
+    return ae, args
+
+
+def main():
+    # Parse and sanitise command line args
+    ae, args = parse_command_line_args()
+    
+    # For use later when defining model
+    architectures = {'single' : SingleLayerAutoEncoder,
+                     'dense': DenseAutoEncoder,
+                     'auto': AutoEncoder}
 
     molgrid.set_gpu_enabled(1-args.use_cpu)
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
-
-    optimisers = {
-        'sgd': tf.keras.optimizers.SGD,
-        'adadelta': tf.keras.optimizers.Adadelta,
-        'adagrad': tf.keras.optimizers.Adagrad,
-        'rmsprop': tf.keras.optimizers.RMSprop,
-        'adamax': tf.keras.optimizers.Adamax,
-        'adam': tf.keras.optimizers.Adam
-    }
-
-    data_root = Path(args.data_root).resolve() if len(
-        args.data_root) else ''
-    train_types = Path(args.train).resolve()
-    batch_size = args.batch_size
-    iterations = args.iterations
-    save_interval = args.save_interval
-    encoding_size = args.encoding_size
-    loss_fn = args.loss
-    lr = args.learning_rate
-    momentum = args.momentum if args.momentum is not None else 0.0
 
     slurm_job_id = os.getenv('SLURM_JOB_ID')
     if isinstance(slurm_job_id, str):
         slurm_log_file = Path.home() / 'slurm_{}.out'.format(slurm_job_id)
         arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
             slurm_job_id, slurm_log_file)
-        savepath = Path(args.save_path, slurm_job_id).resolve()
+        save_path = Path(args.save_path, slurm_job_id).resolve()
     else:
-        savepath = Path(args.save_path, str(int(time.time()))).resolve()
+        save_path = Path(args.save_path, str(int(time.time()))).resolve()
 
-    try:
-        optimiser = optimisers[args.optimiser.lower()]
-    except KeyError:
-        raise RuntimeError('{} not a recognised optimiser.'.format(
-            args.optimiser))
-    if (args.momentum is not None and
-            args.optimiser.lower() not in ['sgd', 'rmsprop']):
+    if args.momentum > 0 and args.optimiser.lower() not in ['sgd', 'rmsprop']:
         raise RuntimeError(
             'Momentum only used for RMSProp and SGD optimisers.')
     if not Path(args.train).exists():
         raise RuntimeError('{} does not exist.'.format(args.train))
 
-    Path(savepath, 'checkpoints').mkdir(parents=True, exist_ok=True)
+    Path(save_path, 'checkpoints').mkdir(parents=True, exist_ok=True)
 
-    arg_str += '\nabsolute_save_path {}\n'.format(savepath)
+    arg_str += '\nabsolute_save_path {}\n'.format(save_path)
     print(arg_str)
 
-    with open(savepath / 'config', 'w') as f:
+    with open(save_path / 'config', 'w') as f:
         f.write(arg_str)
 
     tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
-        data_root=str(data_root), balanced=False, shuffle=True)
-    e.populate(str(train_types))
+        data_root=str(args.data_root), balanced=False, shuffle=True)
+    e.populate(str(args.train_types))
 
     for n in e.get_type_names():
         print(n)
@@ -294,38 +294,47 @@ def main():
     gmaker = molgrid.GridMaker(binary=args.binary_mask, dimension=18.0,
                                resolution=1.0)
     dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (batch_size,) + dims
+    tensor_shape = (args.batch_size,) + dims
     input_tensor = molgrid.MGrid5f(*tensor_shape)
 
     # Train autoencoder
     zero_losses, nonzero_losses, losses = [], [], []
 
-    opt_args = {'lr': lr, 'loss': loss_fn}
-    if momentum > 0:
-        opt_args['momentum'] = momentum
+    opt_args = {'lr': args.learning_rate, 'loss': args.loss}
+    if args.momentum > 0:
+        opt_args['momentum'] = args.momentum
 
-    if not load_model:
-        ae = AE(dims, encoding_size=encoding_size,
-                optimiser=optimiser, **opt_args)
+    if ae is None: # No loaded model
+        ae = architectures[args.model](
+            dims,
+            encoding_size=args.encoding_size,
+            optimiser=args.optimiser,
+            **opt_args)
+        
     ae.summary()
-    tf.keras.utils.plot_model(ae, savepath / 'model.png', show_shapes=True)
+    
+    if not args.loss in ['composite_mse', 'unbalanced_loss']:
+        tf.keras.utils.plot_model(
+            ae, save_path / 'model.png',show_shapes=True)
 
     loss_ratio = 0.5
     loss_log = 'iteration {} nonzero_mae zero_mae nonzero_mean\n'.format(
-        loss_fn)
+        args.loss)
     print('Starting training cycle...')
-    print('Working directory: {}'.format(savepath))
+    print('Working directory: {}'.format(save_path))
 
-    for iteration in range(iterations):
-        if not (iteration + 1) % save_interval and iteration < iterations - 1:
+    for iteration in range(args.iterations):
+        if not (iteration + 1) % args.save_interval \
+            and iteration < args.iterations - 1:
+                
             checkpoint_path = Path(
-                savepath,
+                save_path,
                 'checkpoints',
                 'ckpt_model_{}'.format(iteration + 1)
             )
             ae.save(checkpoint_path)
 
-        batch = e.next_batch(batch_size)
+        batch = e.next_batch(args.batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
         input_tensor_numpy = input_tensor.tonumpy()
@@ -334,7 +343,7 @@ def main():
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
         x_inputs = {'input_image': input_tensor_numpy}
-        if loss_fn == 'composite_mse':
+        if args.loss == 'composite_mse':
             x_inputs['frac'] = tf.constant(loss_ratio, shape=(1,))
 
         loss = ae.train_on_batch(
@@ -361,7 +370,7 @@ def main():
         print(loss_str)
         loss_log += loss_str + '\n'
         if not iteration % 10:
-            with open(savepath / 'loss_log.txt', 'w') as f:
+            with open(save_path / 'loss_log.txt', 'w') as f:
                 f.write(loss_log[:-1])
 
         zero_losses.append(zero_mae)
@@ -371,7 +380,7 @@ def main():
 
     # Save final trained autoencoder
     checkpoint_path = Path(
-        savepath, 'checkpoints', 'final_model_{}'.format(iterations))
+        save_path, 'checkpoints', 'final_model_{}'.format(args.iterations))
     ae.save(checkpoint_path)
 
     # Plot zero, nonzero mse
@@ -390,7 +399,7 @@ def main():
         axes[idx].set_ylabel('Loss')
         lines.append(line)
     ax1.legend(lines, [line.get_label() for line in lines])
-    fig.savefig(savepath / 'zero_nonzero_losses.png')
+    fig.savefig(save_path / 'zero_nonzero_losses.png')
 
     # Plot composite mse
     fig, ax1 = plt.subplots()
@@ -401,15 +410,15 @@ def main():
         losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
         axes[idx].plot(np.arange(len(losses))*gap, losses)
         axes[idx].set_ylabel('Loss')
-    ax1.legend([loss_fn])
-    fig.savefig(savepath / 'composite_loss.png')
+    ax1.legend([args.loss])
+    fig.savefig(save_path / 'composite_loss.png')
 
     # Save encodings in serialised format
     print('Saving encodings...')
-    encodings_dir = savepath / 'encodings'
+    encodings_dir = save_path / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
     serialised_encodings = calculate_embeddings(
-        ae, input_tensor, data_root, train_types)
+        ae, input_tensor, args.data_root, args.train_types)
     for receptor_path, ligands in serialised_encodings.items():
         fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
         with open(encodings_dir / fname, 'wb') as f:

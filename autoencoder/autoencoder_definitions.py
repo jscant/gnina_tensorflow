@@ -31,6 +31,17 @@ class AutoEncoderBase(tf.keras.Model):
             lr: learning rate of the optimiser
             momentum: momentum for the optimiser (where applicable)
         """
+        
+        optimisers = {
+            'sgd': tf.keras.optimizers.SGD,
+            'adadelta': tf.keras.optimizers.Adadelta,
+            'adagrad': tf.keras.optimizers.Adagrad,
+            'rmsprop': tf.keras.optimizers.RMSprop,
+            'adamax': tf.keras.optimizers.Adamax,
+            'adam': tf.keras.optimizers.Adam
+        }
+        
+        optimiser = optimisers.get(optimiser, tf.keras.optimizers.SGD)
 
         inputs = [self.input_image]
         if loss == 'composite_mse':
@@ -213,6 +224,7 @@ class AutoEncoderBase(tf.keras.Model):
 
     def _define_activations(self):
         """Returns dict from strings to final layer activations objects."""
+        
         return {'sigmoid': 'sigmoid',
                 'relu': 'relu',
                 'heaviside': self.approx_heaviside}
@@ -229,7 +241,7 @@ class AutoEncoder(AutoEncoderBase):
                  **opt_args):
         """Setup for autoencoder architecture."""
 
-        activations = super(SingleLayerAutoEncoder, self)._define_activations()
+        activations = super(AutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, 'linear')
 
         self.input_image = Input(shape=dims, dtype=tf.float32, name='input')
@@ -312,7 +324,7 @@ class DenseAutoEncoder(AutoEncoderBase):
                  **opt_args):
         """Setup for autoencoder architecture."""
 
-        activations = super(SingleLayerAutoEncoder, self)._define_activations()
+        activations = super(DenseAutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, 'linear')
 
         self.input_image = Input(shape=dims, dtype=tf.float32)
