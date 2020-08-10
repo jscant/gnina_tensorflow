@@ -162,6 +162,22 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', '-s', type=str, default='')
     args = parser.parse_args()
     
+    tf.keras.backend.clear_session()
+
+    # Setup libmolgrid to feed Examples into tensorflow objects
+    e = molgrid.ExampleProvider(
+        data_root=str(args.data_root), balanced=False, shuffle=True)
+    e.populate(str(args.train_types))
+
+    for n in e.get_type_names():
+        print(n)
+
+    gmaker = molgrid.GridMaker(binary=args.binary_mask, dimension=18.0,
+                               resolution=1.0)
+    dims = gmaker.grid_dimensions(e.num_types())
+    tensor_shape = (args.batch_size,) + dims
+    input_tensor = molgrid.MGrid5f(*tensor_shape)
+    
     model = tf.keras.models.load_model(
         args.model_dir,
         custom_objects={
