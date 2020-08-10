@@ -57,7 +57,7 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
     # Setup for gnina
     batch_size = input_tensor.shape[0]
     e = molgrid.ExampleProvider(data_root=str(data_root), balanced=False,
-                                shuffle=True)
+                                shuffle=False)
     e.populate(str(types_file))
 
     # Need a dictionary mapping {rec : deque([(idx, lig), ...])} where idx
