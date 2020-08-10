@@ -344,7 +344,8 @@ def main():
 
         x_inputs = {'input_image': input_tensor_numpy}
         if args.loss == 'composite_mse':
-            x_inputs['frac'] = tf.constant(loss_ratio, shape=(1,))
+            x_inputs['frac'] = tf.constant(
+                loss_ratio, shape=(args.batch_size,))
 
         loss = ae.train_on_batch(
             x_inputs,
