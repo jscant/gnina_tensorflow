@@ -133,6 +133,7 @@ if __name__ == '__main__':
             autoencoder, gmaker, input_tensor, args.data_root, args.test,
             save_path=args.save_path, rotate=False)
     print('Inference took {} s'.format(t.interval))
+    print('Encodings written to {}'.format(args.save_path))
     
     
     

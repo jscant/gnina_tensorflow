@@ -469,6 +469,7 @@ class LoadConfigTrain(argparse.Action):
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
+                if not len(chunks): continue
                 if chunks[0] not in ['load_model',
                                      'absolute_save_path',
                                      'use_cpu',
@@ -508,6 +509,7 @@ class LoadConfigTest(argparse.Action):
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
+                if not len(chunks): continue
                 if chunks[0] in ['data_root', 'save_path']:
                     args += '--{0} {1}\n'.format(*chunks)
                 elif chunks[0] in ['dimension', 'resolution']:
