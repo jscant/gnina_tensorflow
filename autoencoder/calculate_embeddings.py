@@ -118,10 +118,10 @@ if __name__ == '__main__':
     e = molgrid.ExampleProvider(
         data_root=str(args.data_root), balanced=False, shuffle=False)
     e.populate(str(args.test))
-
+    
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,
-        dimension=args.dimension,
+        dimension=args.dimensions,
         resolution=args.resolution)
 
     dims = gmaker.grid_dimensions(e.num_types())
