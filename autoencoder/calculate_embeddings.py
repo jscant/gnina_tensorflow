@@ -121,7 +121,7 @@ if __name__ == '__main__':
     
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,
-        dimension=args.dimensions,
+        dimension=args.dimension,
         resolution=args.resolution)
 
     dims = gmaker.grid_dimensions(e.num_types())

@@ -479,7 +479,6 @@ class LoadConfigTrain(argparse.Action):
                 else:  # store_true args present a problem, loaded manually
                     if chunks[1] == 'True':
                         args += '--{0}\n'.format(chunks[0])
-        print(args)
         parser.parse_args(args.split(), namespace)
 
         # args.load_model is always None if we do not do this, even when

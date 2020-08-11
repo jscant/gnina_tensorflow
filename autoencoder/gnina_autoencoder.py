@@ -6,7 +6,6 @@ Created on Tue Jun 23 14:45:32 2020
 gnina inputs.
 """
 
-import argparse
 import torch
 from math import isnan
 import molgrid
@@ -51,7 +50,7 @@ def main():
 
     Path(save_path, 'checkpoints').mkdir(parents=True, exist_ok=True)
 
-    arg_str += '\nabsolute_save_path {}\n'.format(save_path)
+    arg_str += 'absolute_save_path {}\n'.format(save_path)
     print(arg_str)
 
     with open(save_path / 'config', 'w') as f:
