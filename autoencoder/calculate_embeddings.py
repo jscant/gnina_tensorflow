@@ -18,7 +18,7 @@ from utilities import gnina_embeddings_pb2, gnina_functions
 
 
 def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
-                         rotate=False):
+                         save_path, rotate=False):
     """Calculates encodings for gnina inputs.
 
     Uses trained AutoEncoder object to calculate the embeddings of all gnina
@@ -45,7 +45,7 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
         with open(types_file, 'r') as f:
             for idx, line in enumerate(f.readlines()):
                 chunks = line.strip().split()
-                paths[chunks[-2]].append((idx, chunks[-1]))
+                paths[chunks[-2]].append((idx, int(chunks[0]), chunks[-1]))
         return paths
 
     # Setup for gnina
@@ -89,14 +89,21 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
         receptor_msg.path = receptor_path
         for ligand in ligands:
             global_idx = ligand[0]
-            ligand_path = ligand[1]
+            label = ligand[1]
+            ligand_path = ligand[2]
             embedding = embeddings[global_idx]
             ligand_msg = receptor_msg.ligand.add()
             ligand_msg.path = ligand_path
             ligand_msg.embedding.extend(embedding)
+            ligand_msg.label = label
         serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()
 
-    return serialised_embeddings
+    encodings_dir = Path(save_path) / 'encodings'
+    encodings_dir.mkdir(exist_ok=True, parents=True)
+    for receptor_path, ligands in serialised_embeddings.items():
+        fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
+        with open(encodings_dir / fname, 'wb') as f:
+            f.write(ligands)
 
 if __name__ == '__main__':
     # Parse and sanitise command line args
@@ -122,16 +129,11 @@ if __name__ == '__main__':
     input_tensor = molgrid.MGrid5f(*tensor_shape)
     
     with gnina_functions.Timer() as t:
-        encodings = calculate_embeddings(
+        calculate_embeddings(
             autoencoder, gmaker, input_tensor, args.data_root, args.test,
-            rotate=False)
+            save_path=args.save_path, rotate=False)
     print('Inference took {} s'.format(t.interval))
     
-    encodings_dir = Path(args.save_path) / 'encodings'
-    encodings_dir.mkdir(exist_ok=True, parents=True)
-    for receptor_path, ligands in encodings.items():
-        fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-        with open(encodings_dir / fname, 'wb') as f:
-            f.write(ligands)
+    
     
     
