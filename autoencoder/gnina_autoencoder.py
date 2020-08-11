@@ -15,12 +15,44 @@ import os
 import tensorflow as tf
 import time
 
-from autoencoder.autoencoder_definitions import AutoEncoderBase, \
-    DenseAutoEncoder, AutoEncoder, SingleLayerAutoEncoder
-from collections import defaultdict
+from autoencoder import autoencoder_definitions
 from matplotlib import pyplot as plt
 from pathlib import Path
 from autoencoder.calculate_embeddings import calculate_embeddings
+
+
+class LoadConfig(argparse.Action):
+    """Class for loading argparse arguments from a config file."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Overloaded function; See parent class."""
+        
+        if values is None:
+            return
+        config = Path(values).parents[1] / 'config'
+        if not config.exists():
+            raise RuntimeError(
+                "No config file found in experiment's base directory ({})".format(
+                    config))
+        args = ''
+        with open(config, 'r') as f:
+            for line in f.readlines():
+                chunks = line.split()
+                if chunks[0] not in ['load_model',
+                                     'absolute_save_path',
+                                     'use_cpu',
+                                     'binary_mask',
+                                     'save_embeddings', ]:
+                    args += '--{0} {1}\n'.format(*chunks)
+                else:  # store_true args present a problem, loaded manually
+                    if chunks[1] == 'True':
+                        args += '--{0}\n'.format(chunks[0])
+        print(args)
+        parser.parse_args(args.split(), namespace)
+
+        # args.load_model is always None if we do not do this, even when
+        # it is specified using --load_model.
+        namespace.load_model = values
 
 
 def pickup(path):
@@ -30,62 +62,34 @@ def pickup(path):
         path: location of saved weights and architecture
 
     Returns:
-        DenseAutoEncoder object initialised with weights from saved checkpoint,
-        as well as a dictionary containing the command line arguments taken
-        from the config file used to produce the saved model.
+        AutoEncoderBase-derived object initialised with weights from saved
+        checkpoint.
     """
-    path = Path(path).resolve()
-    config_path = path.parents[2]
-    config_file = config_path / 'config'
-    if not config_file.exists():
-        raise RuntimeError(
-            "No config file found in experiment's base directory ({})".format(
-                config_path))
-    args = defaultdict(str)
-    with open(config_file, 'r') as f:
-        for line in f.readlines():
-            chunks = line.split()
-            if len(chunks) < 2:
-                continue
-            key = chunks[0]
-            value = chunks[1]
-            if value.lower() == 'none':
-                args[key] = None
-                continue
-            if value.lower() in ['true', 'false']:
-                args[key] = [False, True][value.lower() == 'true']
-                continue
-            try:
-                if len(value.split('.')) > 1:
-                    true_value = float(value)
-                else:
-                    true_value = int(value)
-            except ValueError:
-                true_value = value
-            args[key] = true_value
+
     ae = tf.keras.models.load_model(
         path,
         custom_objects={
-            'zero_mse': AutoEncoderBase.zero_mse,
-            'nonzero_mse': AutoEncoderBase.nonzero_mse,
-            'composite_mse': AutoEncoderBase.composite_mse,
-            'nonzero_mae': AutoEncoderBase.nonzero_mae,
-            'zero_mae': AutoEncoderBase.zero_mae,
-            'approx_heaviside': AutoEncoderBase.approx_heaviside,
-            'unbalanced_loss': AutoEncoderBase.unbalanced_loss,
+            'zero_mse': autoencoder_definitions.zero_mse,
+            'nonzero_mse': autoencoder_definitions.nonzero_mse,
+            'composite_mse': autoencoder_definitions.composite_mse,
+            'nonzero_mae': autoencoder_definitions.nonzero_mae,
+            'zero_mae': autoencoder_definitions.zero_mae,
+            'approx_heaviside': autoencoder_definitions.approx_heaviside,
+            'unbalanced_loss': autoencoder_definitions.unbalanced_loss,
         }
     )
+
     # Bug with add_loss puts empty dict at the end of model._layers which
     # interferes with some functionality (such as
     # tf.keras.utils.plot_model)
     ae._layers = [layer for layer in ae._layers if isinstance(
         layer, tf.keras.layers.Layer)]
-    return ae, args
+    return ae
 
 
 def parse_command_line_args():
     """Parse command line args and return as dict.
-    
+
     Returns a dictionary containing all args, default or otherwise; if 'pickup'
     is specified, as many args as are contained in the config file for that
     (partially) trained model are loaded, otherwise defaults are given.
@@ -93,6 +97,14 @@ def parse_command_line_args():
     'pickup' directory.
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        'load_model', type=str, action=LoadConfig, nargs='?',
+        help="""Load saved keras model. If specified, this should be the 
+        directory containing the saved assets of a saved autoencoder. If
+        specified, the options are loaded from the config file saved when
+        the original model was trained; any options specified here will
+        override the original options.
+        """)
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
     parser.add_argument("--train", '-t', type=str, required=False)
@@ -126,57 +138,31 @@ def parse_command_line_args():
     parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
-        '--pickup', '-p', type=str, required=False,
-        help='Pick up from a checkpoint; use same config as that checkpoint' +
-        'was generated by')
-    parser.add_argument(
         '--use_cpu', '-g', action='store_true')
     parser.add_argument(
         '--save_embeddings', action='store_true')
+
+    
+
     args = parser.parse_args()
 
-    load_model = bool(args.pickup) # False if empty string or NoneType
-    ae = None
-    if load_model:
-        ae, loaded_args = pickup(args.pickup)
-        args = argparse.Namespace(
-            pickup=args.pickup,
-            data_root=loaded_args['data_root'],
-            train=loaded_args['train'],
-            batch_size=loaded_args['batch_size'],
-            iterations=args.iterations,
-            save_interval=loaded_args['save_interval'],
-            encoding_size=loaded_args['encoding_size'],
-            learning_rate=args.learning_rate if
-            isinstance(args.learning_rate, float) else
-            loaded_args['learning_rate'],
-            momentum=args.momentum if isinstance(args.momentum, float)
-            else loaded_args['momentum'],
-            optimiser=args.optimiser if isinstance(args.optimiser, str)
-            else loaded_args['optimiser'],
-            save_path=args.save_path,
-            use_cpu=args.use_cpu,
-            loss=loaded_args.get('loss', 'mse'),
-            binary_mask=loaded_args.get('binary_mask', False),
-            final_activation=loaded_args.get('final_activation', 'unknown'),
-            save_embeddings=loaded_args.get('save_embeddings', True),
-            dimension=loaded_args.get('dimension', 18.0),
-            resolution=loaded_args.get('resolution', 1.0),
-        )
-        
-    args.train_types = Path(args.train).resolve()
-    args.data_root = Path(args.data_root).resolve()
-    return ae, args
+    autoencoder = None
+    if args.load_model is not None:  # Load a model
+        autoencoder = pickup(args.load_model)
+
+    #args.train = Path(args.train).resolve()
+    #args.data_root = Path(args.data_root).resolve()
+    return autoencoder, args
 
 
 def main():
     # Parse and sanitise command line args
     ae, args = parse_command_line_args()
-    
+
     # For use later when defining model
-    architectures = {'single' : SingleLayerAutoEncoder,
-                     'dense': DenseAutoEncoder,
-                     'auto': AutoEncoder}
+    architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
+                     'dense': autoencoder_definitions.DenseAutoEncoder,
+                     'auto': autoencoder_definitions.AutoEncoder}
 
     molgrid.set_gpu_enabled(1-args.use_cpu)
     arg_str = '\n'.join(
@@ -210,13 +196,13 @@ def main():
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
         data_root=str(args.data_root), balanced=False, shuffle=True)
-    e.populate(str(args.train_types))
-
-    for n in e.get_type_names():
-        print(n)
+    e.populate(str(args.train))
 
     gmaker = molgrid.GridMaker(
-        binary=args.binary_mask, dimension=args.dimension, resolution=args.resolution)
+        binary=args.binary_mask,
+        dimension=args.dimension,
+        resolution=args.resolution)
+
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (args.batch_size,) + dims
     input_tensor = molgrid.MGrid5f(*tensor_shape)
@@ -234,12 +220,12 @@ def main():
             encoding_size=args.encoding_size,
             optimiser=args.optimiser,
             **opt_args)
-        
+
     ae.summary()
-    
+
     if not args.loss in ['composite_mse', 'unbalanced_loss']:
         tf.keras.utils.plot_model(
-            ae, save_path / 'model.png',show_shapes=True)
+            ae, save_path / 'model.png', show_shapes=True)
 
     loss_ratio = 0.5
     loss_log = 'iteration {} nonzero_mae zero_mae nonzero_mean\n'.format(
@@ -249,8 +235,8 @@ def main():
 
     for iteration in range(args.iterations):
         if not (iteration + 1) % args.save_interval \
-            and iteration < args.iterations - 1:
-                
+                and iteration < args.iterations - 1:
+
             checkpoint_path = Path(
                 save_path,
                 'checkpoints',
@@ -344,7 +330,7 @@ def main():
         encodings_dir = save_path / 'encodings'
         encodings_dir.mkdir(exist_ok=True, parents=True)
         serialised_encodings = calculate_embeddings(
-            ae, gmaker, input_tensor, args.data_root, args.train_types)
+            ae, gmaker, input_tensor, args.data_root, args.train)
         for receptor_path, ligands in serialised_encodings.items():
             fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
             with open(encodings_dir / fname, 'wb') as f:

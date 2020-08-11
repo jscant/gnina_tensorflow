@@ -20,6 +20,159 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 
 
+def long_sigmoid(x):
+    """2.3 times the sigmoid function."""
+    return tf.math.multiply(2.3, tf.nn.sigmoid(x))
+
+
+def nonzero_mse(target, reconstruction):
+    """Mean squared error for non-zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are not equal to zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all non-zero entries in the target
+    """
+    mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
+    masked_difference = (target - reconstruction) * mask
+    return tf.reduce_mean(tf.square(masked_difference))
+
+
+def zero_mse(target, reconstruction):
+    """Mean squared error for zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are equal to zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all zero entries in the target
+    """
+    mask = tf.cast(tf.equal(target, 0), tf.float32)
+    masked_difference = (target - reconstruction) * mask
+    return tf.reduce_mean(tf.square(masked_difference))
+
+
+def composite_mse(target, reconstruction, ratio):
+    """Weighted mean squared error of nonzero-only and zero-only inputs.
+
+    Finds the MSE between the autoencoder reconstruction and the nonzero
+    entries of the input, the MSE between the reconstruction and the zero
+    entries of the input and gives the weighted average of the two.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        ratio: desired ratio of nonzero : zero
+
+    Returns:
+        Average weighted by:
+
+            ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
+
+        where nonzero_mse and zero_mse are the MSE for the nonzero and zero
+        parts of target respectively.
+    """
+    frac = tf.divide(ratio, 1+ratio)
+    return tf.math.add(
+        tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
+        tf.math.multiply(1-frac, zero_mse(target, reconstruction)))
+
+
+def mae(target, reconstruction):
+    """Mean absolute error loss function.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction.
+    """
+    return tf.reduce_mean(tf.abs(target - reconstruction))
+
+
+def zero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is equal to zero.
+        This can be NaN if there are no inputs equal to zero.
+    """
+    mask = tf.cast(tf.equal(target, 0), tf.float32)
+    masked_diff = (target - reconstruction) * mask
+    abs_diff = tf.abs(masked_diff)
+    return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
+
+
+def nonzero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are not zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is not zero.
+        This can be NaN if there are no nonzero inputs.
+    """
+    mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
+    mask_sum = tf.reduce_sum(mask)
+    masked_diff = (target - reconstruction) * mask
+    abs_diff = tf.abs(masked_diff)
+    return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
+
+
+def unbalanced_loss(target, reconstruction):
+    """Loss function which more heavily penalises loss on nonzero terms.
+
+    Only use for positive labels.
+
+    Arguments:
+        y_true: tensor containing true labels for model inputs
+        y_pred: tensor containing output(s) of model
+
+    Returns:
+        Error weighted strongly in favour of penalising errors on parts
+        of y_true which are above zero.
+    """
+    term_1 = tf.pow(target - reconstruction, 4)
+    term_2 = tf.pow(target - reconstruction, 2)
+    loss = target*term_1 + tf.multiply(
+        tf.constant(0.01), tf.multiply(1 - target, term_2))
+    return tf.reduce_mean(loss)
+
+
+def approx_heaviside(x):
+    """Activation function: continuous approximation to Heaviside fn.
+
+    Arguments:
+        x: Tensor with pre-activation values.
+
+    Returns:
+        Tensor containing activations, where activations at or below zero
+        are (approx.) zero, and activations above zero are (approx) one.
+    """
+    return 0.5 + 0.5*tf.tanh(x*10.)
+
+
 class AutoEncoderBase(tf.keras.Model):
     """Virtual parent class for autoencoders."""
 
@@ -28,10 +181,12 @@ class AutoEncoderBase(tf.keras.Model):
 
         Arguments:
             optimiser: any keras optimisation class
-            lr: learning rate of the optimiser
-            momentum: momentum for the optimiser (where applicable)
+            loss: any keras loss fuction (or string reference), or or
+                'unbalanced'/'composite_mse' (custom weighted loss functions)
+            opt_args: arguments for the keras optimiser (see keras
+                documentation)
         """
-        
+
         optimisers = {
             'sgd': tf.keras.optimizers.SGD,
             'adadelta': tf.keras.optimizers.Adadelta,
@@ -40,8 +195,10 @@ class AutoEncoderBase(tf.keras.Model):
             'adamax': tf.keras.optimizers.Adamax,
             'adam': tf.keras.optimizers.Adam
         }
-        
-        optimiser = optimisers.get(optimiser, tf.keras.optimizers.SGD)
+
+        # If optimiser is a string, turn it into a keras optimiser object
+        if isinstance(optimiser, str):
+            optimiser = optimisers.get(optimiser, tf.keras.optimizers.SGD)
 
         inputs = [self.input_image]
         if loss == 'composite_mse':
@@ -53,10 +210,10 @@ class AutoEncoderBase(tf.keras.Model):
             outputs=[self.reconstruction, self.encoding]
         )
 
-        metrics = {'reconstruction': [self.mae, self.nonzero_mae, self.zero_mae,
-                                      self.zero_mse, self.nonzero_mse]}
+        metrics = {'reconstruction': [mae, nonzero_mae, zero_mae,
+                                      zero_mse, nonzero_mse]}
         if loss == 'composite_mse':
-            self.add_loss(self.composite_mse(
+            self.add_loss(composite_mse(
                 self.input_image, self.reconstruction, self.frac))
             self.compile(
                 optimizer=optimiser(**opt_args),
@@ -64,7 +221,7 @@ class AutoEncoderBase(tf.keras.Model):
             )
         else:
             if loss == 'unbalanced':
-                loss = self.unbalanced_loss
+                loss = unbalanced_loss
             self.compile(
                 optimizer=optimiser(**opt_args),
                 loss={'reconstruction': loss,
@@ -78,156 +235,12 @@ class AutoEncoderBase(tf.keras.Model):
         self._layers = [layer for layer in self._layers if isinstance(
             layer, tf.keras.layers.Layer)]
 
-    def long_sigmoid(self, x):
-        """2.3 times the sigmoid function."""
-        return tf.math.multiply(2.3, tf.nn.sigmoid(x))
-
-    def nonzero_mse(self, target, reconstruction):
-        """Mean squared error for non-zero values in the target matrix
-
-        Finds the mean squared error for all parts of the input tensor which
-        are not equal to zero.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-
-        Returns:
-            Mean squared error for all non-zero entries in the target
-        """
-        mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
-        masked_difference = (target - reconstruction) * mask
-        return tf.reduce_mean(tf.square(masked_difference))
-
-    def zero_mse(self, target, reconstruction):
-        """Mean squared error for zero values in the target matrix
-
-        Finds the mean squared error for all parts of the input tensor which
-        are equal to zero.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-
-        Returns:
-            Mean squared error for all zero entries in the target
-        """
-        mask = tf.cast(tf.equal(target, 0), tf.float32)
-        masked_difference = (target - reconstruction) * mask
-        return tf.reduce_mean(tf.square(masked_difference))
-
-    def composite_mse(self, target, reconstruction, ratio):
-        """Weighted mean squared error of nonzero-only and zero-only inputs.
-
-        Finds the MSE between the autoencoder reconstruction and the nonzero
-        entries of the input, the MSE between the reconstruction and the zero
-        entries of the input and gives the weighted average of the two.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-            ratio: desired ratio of nonzero : zero
-
-        Returns:
-            Average weighted by:
-
-                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
-
-            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
-            parts of target respectively.
-        """
-        frac = tf.divide(ratio, 1+ratio)
-        return tf.math.add(
-            tf.math.multiply(frac, self.nonzero_mse(target, reconstruction)),
-            tf.math.multiply(1-frac, self.zero_mse(target, reconstruction)))
-
-    def mae(self, target, reconstruction):
-        """Mean absolute error loss function.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-
-        Returns:
-            Tensor containing the mean absolute error between the target and
-            the reconstruction.
-        """
-        return tf.reduce_mean(tf.abs(target - reconstruction))
-
-    def zero_mae(self, target, reconstruction):
-        """Mean absolute error loss function target values are zero.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-
-        Returns:
-            Tensor containing the mean absolute error between the target and
-            the reconstruction where the mean is taken over values where
-            the target is equal to zero.
-            This can be NaN if there are no inputs equal to zero.
-        """
-        mask = tf.cast(tf.equal(target, 0), tf.float32)
-        masked_diff = (target - reconstruction) * mask
-        abs_diff = tf.abs(masked_diff)
-        return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
-
-    def nonzero_mae(self, target, reconstruction):
-        """Mean absolute error loss function target values are not zero.
-
-        Arguments:
-            target: input tensor
-            reconstruction: output tensor of the autoencoder
-
-        Returns:
-            Tensor containing the mean absolute error between the target and
-            the reconstruction where the mean is taken over values where
-            the target is not zero.
-            This can be NaN if there are no nonzero inputs.
-        """
-        mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
-        mask_sum = tf.reduce_sum(mask)
-        masked_diff = (target - reconstruction) * mask
-        abs_diff = tf.abs(masked_diff)
-        return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
-
-    def unbalanced_loss(self, y_true, y_pred):
-        """Loss function which more heavily penalises loss on nonzero terms.
-
-        Only use for positive labels.
-
-        Arguments:
-            y_true: tensor containing true labels for model inputs
-            y_pred: tensor containing output(s) of model
-
-        Returns:
-            Error weighted strongly in favour of penalising errors on parts
-            of y_true which are above zero.
-        """
-        term_1 = tf.pow(y_true - y_pred, 4)
-        term_2 = tf.pow(y_true - y_pred, 2)
-        loss = y_true*term_1 + tf.multiply(
-            tf.constant(0.01), tf.multiply(1 - y_true, term_2))
-        return tf.reduce_mean(loss)
-
-    def approx_heaviside(self, x):
-        """Activation function: continuous approximation to Heaviside fn.
-
-        Arguments:
-            x: Tensor with pre-activation values.
-
-        Returns:
-            Tensor containing activations, where activations at or below zero
-            are (approx.) zero, and activations above zero are (approx) one.
-        """
-        return 0.5 + 0.5*tf.tanh(x*10.)
-
     def _define_activations(self):
         """Returns dict from strings to final layer activations objects."""
-        
+
         return {'sigmoid': 'sigmoid',
                 'relu': 'relu',
-                'heaviside': self.approx_heaviside}
+                'heaviside': approx_heaviside}
 
 
 class AutoEncoder(AutoEncoderBase):
@@ -235,11 +248,21 @@ class AutoEncoder(AutoEncoderBase):
     def __init__(self,
                  dims,
                  encoding_size=10,
-                 optimiser=tf.keras.optimizers.SGD,
+                 optimiser='sgd',
                  loss='mse',
                  final_activation='sigmoid',
                  **opt_args):
-        """Setup for autoencoder architecture."""
+        """Setup for autoencoder architecture.
+        
+        Arguments:
+            dims: dimentionality of inputs
+            encoding_size: size of bottleneck
+            optimiser: keras optimiser (string)
+            loss: loss function (string or keras loss object)
+            final_activation: activation function for final layer
+            opt_args: arguments for the keras optimiser (see keras
+                documentation)
+        """
 
         activations = super(AutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, 'linear')
@@ -315,14 +338,23 @@ class AutoEncoder(AutoEncoderBase):
 
 
 class DenseAutoEncoder(AutoEncoderBase):
-    """Autoencoder with Dense connectivity."""
+    """Convolutional autoencoder with Dense connectivity."""
 
     def __init__(self, dims, encoding_size=10,
                  optimiser=tf.keras.optimizers.SGD,
                  loss='mse',
                  final_activation='sigmoid',
                  **opt_args):
-        """Setup for autoencoder architecture."""
+        """Setup for autoencoder architecture.
+        
+        Arguments:
+            dims: dimentionality of inputs
+            encoding_size: size of bottleneck
+            optimiser: keras optimiser (string)
+            loss: loss function (string or keras loss object)
+            final_activation: activation function for final layer
+            opt_args: arguments for the keras optimiser (see keras
+                documentation)"""
 
         activations = super(DenseAutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, 'linear')
@@ -388,7 +420,17 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                  loss='mse',
                  final_activation='sigmoid',
                  **opt_args):
-        """Setup for autoencoder architecture."""
+        """Setup for single layer autoencoder architecture.
+        
+        Arguments:
+            dims: dimentionality of inputs
+            encoding_size: size of bottleneck
+            optimiser: keras optimiser (string)
+            loss: loss function (string or keras loss object)
+            final_activation: activation function for final layer
+            opt_args: arguments for the keras optimiser (see keras
+                documentation)
+        """
 
         activations = super(SingleLayerAutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, 'linear')
