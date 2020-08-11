@@ -254,7 +254,7 @@ class AutoEncoder(AutoEncoderBase):
                  final_activation='sigmoid',
                  **opt_args):
         """Setup for autoencoder architecture.
-        
+
         Arguments:
             dims: dimentionality of inputs
             encoding_size: size of bottleneck
@@ -347,7 +347,7 @@ class DenseAutoEncoder(AutoEncoderBase):
                  final_activation='sigmoid',
                  **opt_args):
         """Setup for autoencoder architecture.
-        
+
         Arguments:
             dims: dimentionality of inputs
             encoding_size: size of bottleneck
@@ -422,7 +422,7 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                  final_activation='sigmoid',
                  **opt_args):
         """Setup for single layer autoencoder architecture.
-        
+
         Arguments:
             dims: dimentionality of inputs
             encoding_size: size of bottleneck
@@ -450,19 +450,21 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         )
 
 
-class LoadConfig(argparse.Action):
+class LoadConfigTrain(argparse.Action):
     """Class for loading argparse arguments from a config file."""
 
     def __call__(self, parser, namespace, values, option_string=None):
         """Overloaded function; See parent class."""
-        
+
         if values is None:
             return
         config = Path(values).parents[1] / 'config'
         if not config.exists():
-            raise RuntimeError(
-                "No config file found in experiment's base directory ({})".format(
+            print("No config file found in experiment's base directory ({})".format(
                     config))
+            print('Only specified command line args will be used.')
+            namespace.load_model = values
+            return
         args = ''
         with open(config, 'r') as f:
             for line in f.readlines():
@@ -471,11 +473,46 @@ class LoadConfig(argparse.Action):
                                      'absolute_save_path',
                                      'use_cpu',
                                      'binary_mask',
-                                     'save_embeddings', ]:
+                                     'save_embeddings']:
                     args += '--{0} {1}\n'.format(*chunks)
                 else:  # store_true args present a problem, loaded manually
                     if chunks[1] == 'True':
                         args += '--{0}\n'.format(chunks[0])
+        print(args)
+        parser.parse_args(args.split(), namespace)
+
+        # args.load_model is always None if we do not do this, even when
+        # it is specified using --load_model.
+        namespace.load_model = values
+        
+        
+class LoadConfigTest(argparse.Action):
+    """Class for loading argparse arguments from a config file."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Overloaded function; See parent class."""
+
+        if values is None:
+            return
+        print('config', values)
+        config = Path(values).parents[1] / 'config'
+        if not config.exists():
+            print("No config file found in experiment's base directory ({})".format(
+                    config))
+            print('Only specified command line args will be used.')
+            namespace.load_model = values
+            return
+        args = ''
+        with open(config, 'r') as f:
+            for line in f.readlines():
+                chunks = line.split()
+                if chunks[0] in ['data_root', 'save_path']:
+                    args += '--{0} {1}\n'.format(*chunks)
+                elif chunks[0] in ['dimension', 'resolution']:
+                    setattr(namespace, chunks[0], float(chunks[1]))
+                else:  # store_true args present a problem, loaded manually
+                    if chunks[0] == 'binary_mask' and chunks[1] == 'True':
+                        args += '--{0}binary_mask'.format(chunks[0])
         print(args)
         parser.parse_args(args.split(), namespace)
 
@@ -514,3 +551,81 @@ def pickup(path):
     ae._layers = [layer for layer in ae._layers if isinstance(
         layer, tf.keras.layers.Layer)]
     return ae
+
+
+def parse_command_line_args(test_or_train='train'):
+    """Parse command line args and return as dict.
+
+    Returns a dictionary containing all args, default or otherwise; if 'pickup'
+    is specified, as many args as are contained in the config file for that
+    (partially) trained model are loaded, otherwise defaults are given.
+    Command line args override args found in the config of model found in
+    'pickup' directory.
+    """
+    
+    parser = argparse.ArgumentParser()
+    
+    if test_or_train == 'train':
+        parser.add_argument(
+            'load_model', type=str, action=LoadConfigTrain,
+            nargs='?', help=
+            """Load saved keras model. If specified, this should be the 
+            directory containing the assets of a saved autoencoder. 
+            If specified, the options are loaded from the config file saved
+            when the original model was trained; any options specified in the 
+            command line will override the options loaded from the config file.
+            """)
+        parser.add_argument("--train", '-t', type=str, required=False)
+        parser.add_argument('--encoding_size', '-e', type=int, required=False,
+                            default=50)
+        parser.add_argument('--iterations', '-i', type=int, required=False)
+        parser.add_argument(
+            '--save_interval', type=int, required=False, default=10000)
+        parser.add_argument(
+            '--model', '-m', type=str, required=False, default='single',
+            help='Model architecture; one of single (SingleLayerAutoencoder' +
+            '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
+        parser.add_argument(
+            '--optimiser', '-o', type=str, required=False, default='sgd')
+        parser.add_argument(
+            '--learning_rate', '-l', type=float, required=False)
+        parser.add_argument(
+            '--momentum', type=float, required=False, default=0.0)
+        parser.add_argument(
+            '--loss', type=str, required=False, default='mse')
+        parser.add_argument(
+            '--final_activation', type=str, required=False, default='sigmoid')
+        parser.add_argument('--binary_mask', action='store_true')
+        parser.add_argument(
+            '--dimension', type=float, required=False, default=18.0)
+        parser.add_argument(
+            '--resolution', type=float, required=False, default=1.0)
+    else:
+        parser.add_argument(
+            '--load_model', type=str, action=LoadConfigTest, help=
+            """Load saved keras model. If specified, this should be the 
+            directory containing the assets of a saved autoencoder. 
+            If specified, the options are loaded from the config file saved
+            when the original model was trained; any options specified in the 
+            command line will override the options loaded from the config file.
+            """)
+        parser.add_argument("--test", '-t', type=str, required=False)
+        
+    parser.add_argument("--data_root", '-r', type=str, required=False,
+                            default='')
+    parser.add_argument(
+        '--batch_size', '-b', type=int, required=False, default=16)
+    parser.add_argument(
+        '--save_path', '-s', type=str, required=False, default='.')
+    parser.add_argument(
+        '--use_cpu', '-g', action='store_true')
+    parser.add_argument(
+        '--save_embeddings', action='store_true')
+
+    args = parser.parse_args()
+
+    autoencoder = None
+    if args.load_model is not None:  # Load a model
+        autoencoder = pickup(args.load_model)
+
+    return autoencoder, args

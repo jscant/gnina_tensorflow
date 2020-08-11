@@ -7,8 +7,10 @@ Created on Mon Aug 10 11:11:57 2020
 @brief: Use trained autoencoder to calculate embeddings for gnina inputs.
 """
 
-import argparse
+import torch
+import molgrid
 
+from autoencoder import autoencoder_definitions
 from collections import defaultdict, deque
 from utilities import gnina_embeddings_pb2
 
@@ -30,7 +32,7 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
 
     Returns:
         Dictionary of serialised protein protobuf messages with structure
-        defined in gnina_embeddings.proto. Structure is:
+        defined in gnina_embeddings.proto. The structure is:
 
             {receptor_path : serialised_protobuf_messages (1 per ligand)}
     """
@@ -94,3 +96,6 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
         serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()
 
     return serialised_embeddings
+
+    
+    

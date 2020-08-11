@@ -21,77 +21,9 @@ from pathlib import Path
 from autoencoder.calculate_embeddings import calculate_embeddings
 
 
-def parse_command_line_args():
-    """Parse command line args and return as dict.
-
-    Returns a dictionary containing all args, default or otherwise; if 'pickup'
-    is specified, as many args as are contained in the config file for that
-    (partially) trained model are loaded, otherwise defaults are given.
-    Command line args override args found in the config of model found in
-    'pickup' directory.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'load_model', type=str, action=autoencoder_definitions.LoadConfig,
-        nargs='?', help="""Load saved keras model. If specified, this should
-        be the directory containing the assets of a saved autoencoder.
-        If specified, the options are loaded from the config file saved when 
-        the original model was trained; any options specified in the command
-        line will override the options loaded from the config file.
-        """)
-    parser.add_argument("--data_root", '-r', type=str, required=False,
-                        default='')
-    parser.add_argument("--train", '-t', type=str, required=False)
-    parser.add_argument('--encoding_size', '-e', type=int, required=False,
-                        default=50)
-    parser.add_argument(
-        '--iterations', '-i', type=int, required=False)
-    parser.add_argument(
-        '--save_interval', type=int, required=False, default=10000)
-    parser.add_argument(
-        '--batch_size', '-b', type=int, required=False, default=16)
-    parser.add_argument(
-        '--model', '-m', type=str, required=False, default='single',
-        help='Model architecture; one of single (SingleLayerAutoencoder' +
-        '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
-    parser.add_argument(
-        '--optimiser', '-o', type=str, required=False, default='sgd')
-    parser.add_argument(
-        '--learning_rate', '-l', type=float, required=False)
-    parser.add_argument(
-        '--momentum', type=float, required=False, default=0.0)
-    parser.add_argument(
-        '--loss', type=str, required=False, default='mse')
-    parser.add_argument(
-        '--final_activation', type=str, required=False, default='sigmoid')
-    parser.add_argument('--binary_mask', action='store_true')
-    parser.add_argument(
-        '--dimension', type=float, required=False, default=18.0),
-    parser.add_argument(
-        '--resolution', type=float, required=False, default=1.0),
-    parser.add_argument(
-        '--save_path', '-s', type=str, required=False, default='.')
-    parser.add_argument(
-        '--use_cpu', '-g', action='store_true')
-    parser.add_argument(
-        '--save_embeddings', action='store_true')
-
-    
-
-    args = parser.parse_args()
-
-    autoencoder = None
-    if args.load_model is not None:  # Load a model
-        autoencoder = autoencoder_definitions.pickup(args.load_model)
-
-    #args.train = Path(args.train).resolve()
-    #args.data_root = Path(args.data_root).resolve()
-    return autoencoder, args
-
-
 def main():
     # Parse and sanitise command line args
-    ae, args = parse_command_line_args()
+    ae, args = autoencoder_definitions.parse_command_line_args('train')
 
     # For use later when defining model
     architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
@@ -148,7 +80,7 @@ def main():
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
 
-    if ae is None: # No loaded model
+    if ae is None:  # No loaded model
         ae = architectures[args.model](
             dims,
             encoding_size=args.encoding_size,
