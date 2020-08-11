@@ -8,14 +8,15 @@ Autoencoders learn a mapping from a high dimensional space to a lower
 dimensional space, as well as the inverse.
 """
 
-
+import argparse
 import tensorflow as tf
 import numpy as np
 
 from classifier.model_definitions import tf_transition_block,\
     tf_inverse_transition_block, tf_dense_block
-from operator import mul
 from functools import reduce
+from operator import mul
+from pathlib import Path
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 
@@ -447,3 +448,69 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         super(SingleLayerAutoEncoder, self).__init__(
             optimiser, loss, opt_args
         )
+
+
+class LoadConfig(argparse.Action):
+    """Class for loading argparse arguments from a config file."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Overloaded function; See parent class."""
+        
+        if values is None:
+            return
+        config = Path(values).parents[1] / 'config'
+        if not config.exists():
+            raise RuntimeError(
+                "No config file found in experiment's base directory ({})".format(
+                    config))
+        args = ''
+        with open(config, 'r') as f:
+            for line in f.readlines():
+                chunks = line.split()
+                if chunks[0] not in ['load_model',
+                                     'absolute_save_path',
+                                     'use_cpu',
+                                     'binary_mask',
+                                     'save_embeddings', ]:
+                    args += '--{0} {1}\n'.format(*chunks)
+                else:  # store_true args present a problem, loaded manually
+                    if chunks[1] == 'True':
+                        args += '--{0}\n'.format(chunks[0])
+        print(args)
+        parser.parse_args(args.split(), namespace)
+
+        # args.load_model is always None if we do not do this, even when
+        # it is specified using --load_model.
+        namespace.load_model = values
+
+
+def pickup(path):
+    """Loads saved autoencoder.
+
+    Arguments:
+        path: location of saved weights and architecture
+
+    Returns:
+        AutoEncoderBase-derived object initialised with weights from saved
+        checkpoint.
+    """
+
+    ae = tf.keras.models.load_model(
+        path,
+        custom_objects={
+            'zero_mse': zero_mse,
+            'nonzero_mse': nonzero_mse,
+            'composite_mse': composite_mse,
+            'nonzero_mae': nonzero_mae,
+            'zero_mae': zero_mae,
+            'approx_heaviside': approx_heaviside,
+            'unbalanced_loss': unbalanced_loss,
+        }
+    )
+
+    # Bug with add_loss puts empty dict at the end of model._layers which
+    # interferes with some functionality (such as
+    # tf.keras.utils.plot_model)
+    ae._layers = [layer for layer in ae._layers if isinstance(
+        layer, tf.keras.layers.Layer)]
+    return ae

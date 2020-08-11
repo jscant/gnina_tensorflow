@@ -21,72 +21,6 @@ from pathlib import Path
 from autoencoder.calculate_embeddings import calculate_embeddings
 
 
-class LoadConfig(argparse.Action):
-    """Class for loading argparse arguments from a config file."""
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        """Overloaded function; See parent class."""
-        
-        if values is None:
-            return
-        config = Path(values).parents[1] / 'config'
-        if not config.exists():
-            raise RuntimeError(
-                "No config file found in experiment's base directory ({})".format(
-                    config))
-        args = ''
-        with open(config, 'r') as f:
-            for line in f.readlines():
-                chunks = line.split()
-                if chunks[0] not in ['load_model',
-                                     'absolute_save_path',
-                                     'use_cpu',
-                                     'binary_mask',
-                                     'save_embeddings', ]:
-                    args += '--{0} {1}\n'.format(*chunks)
-                else:  # store_true args present a problem, loaded manually
-                    if chunks[1] == 'True':
-                        args += '--{0}\n'.format(chunks[0])
-        print(args)
-        parser.parse_args(args.split(), namespace)
-
-        # args.load_model is always None if we do not do this, even when
-        # it is specified using --load_model.
-        namespace.load_model = values
-
-
-def pickup(path):
-    """Loads saved autoencoder.
-
-    Arguments:
-        path: location of saved weights and architecture
-
-    Returns:
-        AutoEncoderBase-derived object initialised with weights from saved
-        checkpoint.
-    """
-
-    ae = tf.keras.models.load_model(
-        path,
-        custom_objects={
-            'zero_mse': autoencoder_definitions.zero_mse,
-            'nonzero_mse': autoencoder_definitions.nonzero_mse,
-            'composite_mse': autoencoder_definitions.composite_mse,
-            'nonzero_mae': autoencoder_definitions.nonzero_mae,
-            'zero_mae': autoencoder_definitions.zero_mae,
-            'approx_heaviside': autoencoder_definitions.approx_heaviside,
-            'unbalanced_loss': autoencoder_definitions.unbalanced_loss,
-        }
-    )
-
-    # Bug with add_loss puts empty dict at the end of model._layers which
-    # interferes with some functionality (such as
-    # tf.keras.utils.plot_model)
-    ae._layers = [layer for layer in ae._layers if isinstance(
-        layer, tf.keras.layers.Layer)]
-    return ae
-
-
 def parse_command_line_args():
     """Parse command line args and return as dict.
 
@@ -98,12 +32,12 @@ def parse_command_line_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'load_model', type=str, action=LoadConfig, nargs='?',
-        help="""Load saved keras model. If specified, this should be the 
-        directory containing the saved assets of a saved autoencoder. If
-        specified, the options are loaded from the config file saved when
-        the original model was trained; any options specified here will
-        override the original options.
+        'load_model', type=str, action=autoencoder_definitions.LoadConfig,
+        nargs='?', help="""Load saved keras model. If specified, this should
+        be the directory containing the assets of a saved autoencoder.
+        If specified, the options are loaded from the config file saved when 
+        the original model was trained; any options specified in the command
+        line will override the options loaded from the config file.
         """)
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
@@ -148,7 +82,7 @@ def parse_command_line_args():
 
     autoencoder = None
     if args.load_model is not None:  # Load a model
-        autoencoder = pickup(args.load_model)
+        autoencoder = autoencoder_definitions.pickup(args.load_model)
 
     #args.train = Path(args.train).resolve()
     #args.data_root = Path(args.data_root).resolve()
