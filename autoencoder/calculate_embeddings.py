@@ -9,10 +9,12 @@ Created on Mon Aug 10 11:11:57 2020
 
 import torch
 import molgrid
+import tensorflow as tf
 
 from autoencoder import autoencoder_definitions
 from collections import defaultdict, deque
-from utilities import gnina_embeddings_pb2
+from pathlib import Path
+from utilities import gnina_embeddings_pb2, gnina_functions
 
 
 def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
@@ -38,7 +40,7 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
     """
 
     def get_paths():
-        """Reads types file to give path and indexing information"""
+        """Reads types file to give path and indexing information."""
         paths = defaultdict(deque)
         with open(types_file, 'r') as f:
             for idx, line in enumerate(f.readlines()):
@@ -56,21 +58,20 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
     # is the position of the receptor/ligand pair in the types file
     paths = get_paths()
     size = sum([len(info) for _, info in paths.items()])
-
     iterations = size // batch_size
 
     embeddings = {}
     serialised_embeddings = {}
-
+    
     # Inference (obtain encodings)
     for iteration in range(iterations):
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
-        encodings = encoder.predict_on_batch(input_tensor.tonumpy())
+        _, encodings = encoder.predict_on_batch(input_tensor.tonumpy())
         for batch_idx in range(batch_size):
             global_idx = iteration * batch_size + batch_idx
-            embeddings[global_idx] = encodings[batch_idx]
-
+            embeddings[global_idx] = encodings[batch_idx, :]
+            
     remainder = size % batch_size
     batch = e.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
@@ -97,5 +98,40 @@ def calculate_embeddings(encoder, gmaker, input_tensor, data_root, types_file,
 
     return serialised_embeddings
 
+if __name__ == '__main__':
+    # Parse and sanitise command line args
+    autoencoder, args = autoencoder_definitions.parse_command_line_args('test')
+    autoencoder.summary()
+    
+    molgrid.set_gpu_enabled(1 - args.use_cpu)
+
+    tf.keras.backend.clear_session()
+
+    # Setup libmolgrid to feed Examples into tensorflow objects
+    e = molgrid.ExampleProvider(
+        data_root=str(args.data_root), balanced=False, shuffle=False)
+    e.populate(str(args.test))
+
+    gmaker = molgrid.GridMaker(
+        binary=args.binary_mask,
+        dimension=args.dimension,
+        resolution=args.resolution)
+
+    dims = gmaker.grid_dimensions(e.num_types())
+    tensor_shape = (args.batch_size,) + dims
+    input_tensor = molgrid.MGrid5f(*tensor_shape)
+    
+    with gnina_functions.Timer() as t:
+        encodings = calculate_embeddings(
+            autoencoder, gmaker, input_tensor, args.data_root, args.test,
+            rotate=False)
+    print('Inference took {} s'.format(t.interval))
+    
+    encodings_dir = Path(args.save_path) / 'encodings'
+    encodings_dir.mkdir(exist_ok=True, parents=True)
+    for receptor_path, ligands in encodings.items():
+        fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
+        with open(encodings_dir / fname, 'wb') as f:
+            f.write(ligands)
     
     

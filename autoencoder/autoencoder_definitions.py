@@ -494,7 +494,7 @@ class LoadConfigTest(argparse.Action):
 
         if values is None:
             return
-        print('config', values)
+
         config = Path(values).parents[1] / 'config'
         if not config.exists():
             print("No config file found in experiment's base directory ({})".format(
@@ -503,6 +503,8 @@ class LoadConfigTest(argparse.Action):
             namespace.load_model = values
             return
         args = ''
+        namespace.binary_mask = False
+        namespace.use_cpu = False
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
@@ -511,9 +513,13 @@ class LoadConfigTest(argparse.Action):
                 elif chunks[0] in ['dimension', 'resolution']:
                     setattr(namespace, chunks[0], float(chunks[1]))
                 else:  # store_true args present a problem, loaded manually
-                    if chunks[0] == 'binary_mask' and chunks[1] == 'True':
-                        args += '--{0}binary_mask'.format(chunks[0])
-        print(args)
+                    if chunks[0] == 'binary_mask':
+                        if len(chunks) == 1 or chunks[1] == 'True':
+                            namespace.binary_mask = True
+                    if chunks[0] == 'use_cpu':
+                        if len(chunks) == 1 or chunks[1] == 'True':
+                            namespace.use_cpu = True
+
         parser.parse_args(args.split(), namespace)
 
         # args.load_model is always None if we do not do this, even when
@@ -612,7 +618,7 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument("--test", '-t', type=str, required=False)
         
     parser.add_argument("--data_root", '-r', type=str, required=False,
-                            default='')
+                        default='')
     parser.add_argument(
         '--batch_size', '-b', type=int, required=False, default=16)
     parser.add_argument(
@@ -627,5 +633,8 @@ def parse_command_line_args(test_or_train='train'):
     autoencoder = None
     if args.load_model is not None:  # Load a model
         autoencoder = pickup(args.load_model)
+    elif test_or_train == 'test':
+        raise RuntimeError(
+            'Please specify a model to use to calculate encodings.')
 
     return autoencoder, args
