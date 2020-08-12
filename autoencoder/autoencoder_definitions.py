@@ -607,6 +607,8 @@ def parse_command_line_args(test_or_train='train'):
             '--dimension', type=float, required=False, default=18.0)
         parser.add_argument(
             '--resolution', type=float, required=False, default=1.0)
+        parser.add_argument(
+        '--save_encodings', action='store_true')
     else:
         parser.add_argument(
             '--load_model', type=str, action=LoadConfigTest, help=
@@ -626,9 +628,6 @@ def parse_command_line_args(test_or_train='train'):
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
-    parser.add_argument(
-        '--save_encodings', action='store_true')
-
     args = parser.parse_args()
 
     autoencoder = None
