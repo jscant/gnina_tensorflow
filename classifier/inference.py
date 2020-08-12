@@ -18,7 +18,6 @@ import torch
 import molgrid
 import tensorflow as tf
 
-from autoencoder.autoencoder import AutoEncoderBase as ab
 from collections import defaultdict
 from pathlib import Path
 from utilities import gnina_embeddings_pb2
@@ -77,7 +76,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
     embeddings_dir.mkdir(parents=True, exist_ok=True)
 
     print('Performing inference on {} examples'.format(size))
-    representations_dict = defaultdict(dict)
     labels_dict = defaultdict(dict)
     test_output_string = ''
     with open(predictions_fname, 'w') as f:
@@ -94,8 +92,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
                 index = iteration*batch_size + i
                 rec_path = paths[index][0]
                 lig_path = paths[index][1]
-                representations_dict[
-                    rec_path][lig_path] = representations[i]
                 labels_dict[rec_path][lig_path] = labels_numpy[i]
                 test_output_string += '{0} | {1:0.7f} {2} {3}\n'.format(
                     int(labels_numpy[i]),
@@ -118,8 +114,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
             index = size - (size % batch_size) + i
             rec_path = paths[index][0]
             lig_path = paths[index][1]
-            representations_dict[
-                rec_path][lig_path] = representations[i]
             labels_dict[rec_path][lig_path] = labels_numpy[i]
             test_output_string += '{0} | {1:0.7f} {2} {3}\n'.format(
                 int(labels_numpy[i]),
@@ -132,24 +126,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
 
 
     print('Total inference time:', t.interval, 's')
-    
-    # Save predictions to disk
-    serialised_embeddings = {}
-    for receptor_path, ligands in representations_dict.items():
-        receptor_msg = gnina_embeddings_pb2.protein()
-        receptor_msg.path = receptor_path
-        for ligand_path, representation in ligands.items():
-            label = int(labels_dict[receptor_path][ligand_path])
-            ligand_msg = receptor_msg.ligand.add()
-            ligand_msg.path = ligand_path
-            ligand_msg.embedding.extend(representation)
-            ligand_msg.label = label
-        serialised_embeddings[receptor_path] = receptor_msg.SerializeToString()    
-    
-    for receptor_path, ligands in serialised_embeddings.items():
-        fname = Path(receptor_path).stem + '.bin'
-        with open(embeddings_dir / fname, 'wb') as f:
-            f.write(ligands)
 
 
 if __name__ == '__main__':
@@ -160,31 +136,28 @@ if __name__ == '__main__':
     parser.add_argument('--data_root', type=str, default='')
     parser.add_argument('--densefs', '-d', action='store_true')
     parser.add_argument('--save_path', '-s', type=str, default='')
+    parser.add_argument('--use_cpu', '-c', action='store_true')
     args = parser.parse_args()
     
     tf.keras.backend.clear_session()
+    
+    molgrid.set_gpu_enabled(1-int(args.use_cpu))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
         data_root=str(args.data_root), balanced=False, shuffle=True)
-    e.populate(str(args.train_types))
+    e.populate(str(args.test))
 
     for n in e.get_type_names():
         print(n)
 
-    gmaker = molgrid.GridMaker(binary=args.binary_mask, dimension=18.0,
-                               resolution=1.0)
+    gmaker = molgrid.GridMaker()
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (args.batch_size,) + dims
     input_tensor = molgrid.MGrid5f(*tensor_shape)
     
     model = tf.keras.models.load_model(
         args.model_dir,
-        custom_objects={
-            'zero_mse': ab.zero_mse,
-            'nonzero_mse': ab.nonzero_mse,
-            'composite_mse': ab.composite_mse
-            }
     )
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size)

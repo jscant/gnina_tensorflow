@@ -17,8 +17,8 @@ import numpy as np
 import os
 import time
 
-from inference import inference
-from model_definitions import define_baseline_model, define_densefs_model
+from classifier.inference import inference
+from classifier.model_definitions import define_baseline_model, define_densefs_model
 from utilities.gnina_functions import process_batch, beautify_config
 from pathlib import Path
 from tensorflow.keras.utils import plot_model
@@ -101,9 +101,9 @@ def main():
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     e = molgrid.ExampleProvider(
-        data_root=data_root, balanced=True, shuffle=True)
-    print(e.settings().data_root)
-    e.populate(train_types)
+        data_root=str(data_root), balanced=True, shuffle=True)
+    
+    e.populate(str(train_types))
 
     gmaker = molgrid.GridMaker()
     dims = gmaker.grid_dimensions(e.num_types())
