@@ -66,7 +66,7 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
                 paths[idx] = (label, rec, lig)
         return paths
 
-    def write_encodings_to_disk(rec, encodings, encodings_dir):
+    def write_encodings_to_disk(rec, encodings):
         rec_msg = gnina_embeddings_pb2.protein()
         rec_msg.path = rec
         for label, lig_path, lig_encoding in encodings:
@@ -76,7 +76,7 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
             lig_msg.label = label
 
         fname = Path(rec).stem + '.bin'
-        with open(encodings_dir / fname, 'wb') as f:
+        with open(Path(save_path) / 'encodings' / fname, 'wb') as f:
             f.write(rec_msg.SerializeToString())
 
     # Setup for gnina
@@ -106,7 +106,7 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
             global_idx = iteration * batch_size + batch_idx
             label, rec, lig = paths[global_idx]
             if rec != current_rec:
-                write_encodings_to_disk(current_rec, encodings, encodings_dir)
+                write_encodings_to_disk(current_rec, encodings)
                 encodings = []
                 current_rec = rec
             encodings.append((label, lig, encodings_numpy[batch_idx, :]))
@@ -120,7 +120,7 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
         global_idx = iterations * batch_size + batch_idx
         label, rec, lig = paths[global_idx]
         if rec != current_rec:
-            write_encodings_to_disk(current_rec, encodings, encodings_dir)
+            write_encodings_to_disk(current_rec, encodings)
             encodings = []
             current_rec = rec
         encodings.append((label, lig, encodings_numpy[batch_idx, :]))
