@@ -59,8 +59,7 @@ if __name__ == '__main__':
         raise RuntimeError(
             'Cannot specify output filename while using the --in_place flag')
     
-    sorted_types = reorder(
-        'data/small_chembl_test.types', order_by_ligand=args.by_ligand)
+    sorted_types = reorder(args.input, order_by_ligand=args.by_ligand)
     
     if args.in_place:
         output = args.input
