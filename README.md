@@ -14,12 +14,12 @@ The following are required for all or part of gnina_tensorflow:
 ```
 scikit-learn
 joblib
-tensorflow # (2.4.0 or higher: pip install tfnightly)
+tensorflow>=2.4.0: pip install tf-nightly
 ```
 
 Please note: 3D convolutions on the data format provided by gnina do not work when running TensorFlow on a CPU. Hopefully this will change in a future release of TensorFlow.
 
-## Previous work using gnina by this author can be found in Ref. [[3]](#3)
+**Previous work using gnina by this author can be found in Ref. [[3]](#3)**
 
 ## Functionality included
 
