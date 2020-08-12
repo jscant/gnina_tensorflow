@@ -474,7 +474,7 @@ class LoadConfigTrain(argparse.Action):
                                      'absolute_save_path',
                                      'use_cpu',
                                      'binary_mask',
-                                     'save_embeddings']:
+                                     'save_encodings']:
                     args += '--{0} {1}\n'.format(*chunks)
                 else:  # store_true args present a problem, loaded manually
                     if chunks[1] == 'True':
@@ -627,7 +627,7 @@ def parse_command_line_args(test_or_train='train'):
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
     parser.add_argument(
-        '--save_embeddings', action='store_true')
+        '--save_encodings', action='store_true')
 
     args = parser.parse_args()
 

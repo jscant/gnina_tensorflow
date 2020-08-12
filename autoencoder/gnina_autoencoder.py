@@ -17,7 +17,8 @@ import time
 from autoencoder import autoencoder_definitions
 from matplotlib import pyplot as plt
 from pathlib import Path
-from autoencoder.calculate_embeddings import calculate_embeddings
+from autoencoder.calculate_encodings import calculate_encodings
+from utilities.gnina_functions import Timer
 
 
 def main():
@@ -189,18 +190,20 @@ def main():
     ax1.legend([args.loss])
     fig.savefig(save_path / 'composite_loss.png')
 
-    if args.save_embeddings:
-        # Save encodings in serialised format
+    if args.save_encodings: # Save encodings in serialised format
         print('Saving encodings...')
-        encodings_dir = save_path / 'encodings'
-        encodings_dir.mkdir(exist_ok=True, parents=True)
-        serialised_encodings = calculate_embeddings(
-            ae, gmaker, input_tensor, args.data_root, args.train)
-        for receptor_path, ligands in serialised_encodings.items():
-            fname = receptor_path.split('/')[-1].split('.')[0] + '.bin'
-            with open(encodings_dir / fname, 'wb') as f:
-                f.write(ligands)
-
+        with Timer() as t:
+            calculate_encodings(encoder=ae,
+                                gmaker=gmaker,
+                                input_tensor=input_tensor,
+                                data_root=args.data_root,
+                                types_file=args.train,
+                                save_path=save_path,
+                                rotate=False,
+                                verbose=False)
+        print('Encodings calculated and saved to {0} in {1} s'.format(
+            save_path / 'encodings', t.interval))
+            
 
 if __name__ == '__main__':
     main()
