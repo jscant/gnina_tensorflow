@@ -18,7 +18,7 @@ from autoencoder import autoencoder_definitions
 from matplotlib import pyplot as plt
 from pathlib import Path
 from autoencoder.calculate_encodings import calculate_encodings
-from utilities.gnina_functions import Timer
+from utilities.gnina_functions import Timer, format_time, print_with_overwrite
 
 
 def main():
@@ -99,6 +99,7 @@ def main():
     print('Starting training cycle...')
     print('Working directory: {}'.format(save_path))
 
+    start_time = time.time()
     for iteration in range(args.iterations):
         if not (iteration + 1) % args.save_interval \
                 and iteration < args.iterations - 1:
@@ -144,10 +145,22 @@ def main():
         loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
             iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero)
 
-        console_output = ('Iteration: {0} | loss({1}): {2:0.4f} | ' +
-                          'nonzero_mae: {3:0.4f} | zero_mae: {4:0.4f}').format(
-            iteration, args.loss, loss['loss'], nonzero_mae, zero_mae)
-        print('\r', console_output, end='')
+
+        time_elapsed = time.time() - start_time
+        time_per_iter = time_elapsed / (iteration + 1)
+        time_remaining = time_per_iter * (args.iterations - iteration - 1)
+        formatted_eta = format_time(time_remaining)
+        
+        if not iteration:
+            print('\n')
+        
+        console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | ' +
+                          'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}' +
+                          '\nTime elapsed {6} | Time remaining: {7}').format(
+            iteration, args.iterations, args.loss, loss['loss'], nonzero_mae,
+            zero_mae, format_time(time_elapsed), formatted_eta)
+        print_with_overwrite(console_output)
+        
         loss_log += loss_str + '\n'
         if not iteration % 10:
             with open(save_path / 'loss_log.txt', 'w') as f:

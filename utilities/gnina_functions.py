@@ -5,8 +5,11 @@ Created on Fri Jul 10 14:47:44 2020
 @brief: Utility functions for use in various machine learning models
 """
 
-import time
 import datetime
+import math
+import shutil
+import time
+
 
 class Timer:
     """Simple timer class.
@@ -27,6 +30,37 @@ class Timer:
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
+
+
+def format_time(t):
+    """Returns string continaing time in hh:mm:ss format.
+
+    Arguments:
+        t: time in seconds
+    """
+    t = math.floor(t)
+    h = t // 3600
+    m = (t - (h * 3600)) // 60
+    s = t - ((h * 3600) + (m * 60))
+    return '{0:02d}:{1:02d}:{2:02d}'.format(h, m, s)
+
+
+def print_with_overwrite(s):
+    """Prints to console, but overwrites previous output, rather than creating
+    a newline.
+    
+    Arguments:
+        s: string (possibly with multiple lines) to print
+    """
+    ERASE = '\x1b[2K'
+    UP_ONE = '\x1b[1A'
+    lines = s.split('\n')
+    n_lines = len(lines)
+    console_width = shutil.get_terminal_size((0, 20)).columns
+    for idx in range(n_lines):
+        lines[idx] += ' '*max(0, console_width - len(lines[idx]))
+    lines = '\n'.join(lines)
+    print((ERASE + UP_ONE)*(n_lines-1) + s, end='\r', flush=True)
 
 
 def beautify_config(config, fname=None):
