@@ -474,7 +474,8 @@ class LoadConfigTrain(argparse.Action):
                                      'absolute_save_path',
                                      'use_cpu',
                                      'binary_mask',
-                                     'save_encodings']:
+                                     'save_encodings',
+                                     'verbose']:
                     args += '--{0} {1}\n'.format(*chunks)
                 else:  # store_true args present a problem, loaded manually
                     if chunks[1] == 'True':
@@ -628,6 +629,9 @@ def parse_command_line_args(test_or_train='train'):
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
+    parser.add_argument(
+        '--verbose', action='store_true',
+        help='Do not suppress deprecation messages and other tf warnings')
     args = parser.parse_args()
 
     autoencoder = None

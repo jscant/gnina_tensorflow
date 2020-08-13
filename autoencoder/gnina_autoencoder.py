@@ -19,11 +19,19 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 from autoencoder.calculate_encodings import calculate_encodings
 from utilities.gnina_functions import Timer, format_time, print_with_overwrite
+from tensorflow.python.util import deprecation
 
 
 def main():
+    
     # Parse and sanitise command line args
     ae, args = autoencoder_definitions.parse_command_line_args('train')
+    
+    # There really are a lot of these and they are not useful to scientists
+    # using this software. Only log errors (unless verbose)
+    if not args.verbose:
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+        deprecation._PRINT_DEPRECATION_WARNINGS = False
 
     # For use later when defining model
     architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
