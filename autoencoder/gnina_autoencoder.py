@@ -51,7 +51,7 @@ def main():
 
     Path(save_path, 'checkpoints').mkdir(parents=True, exist_ok=True)
 
-    arg_str += 'absolute_save_path {}\n'.format(save_path)
+    arg_str += '\nabsolute_save_path {}\n'.format(save_path)
     print(arg_str)
 
     with open(save_path / 'config', 'w') as f:
@@ -144,7 +144,10 @@ def main():
         loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
             iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero)
 
-        print(loss_str)
+        console_output = ('Iteration: {0} | loss({1}): {2:0.4f} | ' +
+                          'nonzero_mae: {3:0.4f} | zero_mae: {4:0.4f}').format(
+            iteration, args.loss, loss['loss'], nonzero_mae, zero_mae)
+        print('\r', console_output, end='')
         loss_log += loss_str + '\n'
         if not iteration % 10:
             with open(save_path / 'loss_log.txt', 'w') as f:
@@ -153,7 +156,7 @@ def main():
         zero_losses.append(zero_mae)
         nonzero_losses.append(nonzero_mae)
         losses.append(loss['loss'])
-    print('Finished training.')
+    print('\nFinished training.')
 
     # Save final trained autoencoder
     checkpoint_path = Path(
