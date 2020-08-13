@@ -37,8 +37,14 @@ def format_time(t):
 
     Arguments:
         t: time in seconds
+        
+    Raises:
+        ValueError if t < 0
     """
-    t = math.floor(t)
+    if t < 0:
+        raise ValueError('Time must be positive.')
+        
+    t = int(math.floor(t))
     h = t // 3600
     m = (t - (h * 3600)) // 60
     s = t - ((h * 3600) + (m * 60))

@@ -10,7 +10,7 @@ import molgrid
 import numpy as np
 import pytest
 
-from utilities.gnina_functions import get_test_info, process_batch
+from utilities import gnina_functions as gf
 from classifier.model_definitions import define_baseline_model
 
 def test_get_test_info():
@@ -20,15 +20,16 @@ def test_get_test_info():
     Indices match with line numbers in types file.
     """
     test_fname = 'data/small_chembl_test.types'
-    paths, size = get_test_info(test_fname)
+    paths, size = gf.get_test_info(test_fname)
     assert size == 510
     with open(test_fname, 'r') as f:
         for idx, line in enumerate(f.readlines()):
             assert paths[idx][0] == line.split()[1]
             assert paths[idx][1] == line.split()[2]
     
+    
 def test_process_batch():
-    """Unit test for process_batch
+    """Unit test for process_batch.
     
     Class probabilities returned should sum to 1.
     Number of labels, predictions and embeddings should equal batch_size.
@@ -50,7 +51,7 @@ def test_process_batch():
     
     model = define_baseline_model(dims)    
     
-    y_true, outputs = process_batch(
+    y_true, outputs = gf.process_batch(
         model, e, gmaker, input_tensor, labels, train=False)
     
     y_pred, final_layer = outputs
@@ -63,3 +64,18 @@ def test_process_batch():
     y_pred_sums = np.sum(y_pred, axis=1)
     
     assert y_pred_sums == pytest.approx(1.0)
+    
+
+def test_format_time():
+    """Test for format_time.
+    
+    format_time takes a length of time in seconds, and returns a string
+    with the format hh:mm:ss.
+    """
+    
+    assert gf.format_time(0) == '00:00:00'
+    with pytest.raises(ValueError):
+        gf.format_time(-10)
+    assert gf.format_time(1000) == gf.format_time(1000.9)
+    assert gf.format_time(1234) == '00:20:34'
+    assert gf.format_time(1e6) == '277:46:40'
