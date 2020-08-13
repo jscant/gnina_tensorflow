@@ -7,9 +7,11 @@ Created on Mon Aug 10 11:11:57 2020
 @brief: Use trained autoencoder to calculate encodings for gnina inputs.
 """
 
+import gc
 import torch
 import molgrid
 import tensorflow as tf
+import time
 
 from autoencoder import autoencoder_definitions
 from collections import defaultdict, deque
@@ -96,9 +98,13 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
     encodings = []
     encodings_dir = Path(save_path) / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
+    start_time = time.time()
     for iteration in range(iterations):
-        if verbose:
-            print('Iteration {0} of {1}'.format(iteration + 1, iterations))
+        
+        # There is a memory leak with predict_on_batch(), this workaround seems
+        # to prevent it.
+        tf.keras.backend.clear_session()
+        
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
         _, encodings_numpy = encoder.predict_on_batch(input_tensor.tonumpy())
@@ -110,6 +116,20 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
                 encodings = []
                 current_rec = rec
             encodings.append((label, lig, encodings_numpy[batch_idx, :]))
+        
+        time_elapsed = time.time() - start_time
+        time_per_iter = time_elapsed / (iteration + 1)
+        time_remaining = time_per_iter * (iterations - iteration - 1)
+        formatted_eta = gnina_functions.format_time(time_remaining)
+        
+        if not iteration:
+            print('\n')
+        
+        console_output = ('Iteration: {0}/{1}\n' +
+                          'Time elapsed {2} | Time remaining: {3}').format(
+            iteration, iterations, gnina_functions.format_time(time_elapsed),
+            formatted_eta)
+        gnina_functions.print_with_overwrite(console_output)
 
     remainder = total_size % batch_size
     batch = e.next_batch(batch_size)

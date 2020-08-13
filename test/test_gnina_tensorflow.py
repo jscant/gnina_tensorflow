@@ -27,7 +27,7 @@ def test_get_test_info():
             assert paths[idx][0] == line.split()[1]
             assert paths[idx][1] == line.split()[2]
     
-    
+   
 def test_process_batch():
     """Unit test for process_batch.
     
