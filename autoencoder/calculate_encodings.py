@@ -99,6 +99,14 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
     encodings_dir = Path(save_path) / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
     start_time = time.time()
+    
+    try:
+        encoder.get_layer('frac')
+    except ValueError:
+        composite = False
+    else:
+        composite = True
+        
     for iteration in range(iterations):
         
         # There is a memory leak with predict_on_batch(), this workaround seems
@@ -107,7 +115,12 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
         
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
-        _, encodings_numpy = encoder.predict_on_batch(input_tensor.tonumpy())
+        
+        inputs = [input_tensor.tonumpy()]
+        if composite:
+            inputs.append(tf.constant(1., shape=(batch_size,)))
+        _, encodings_numpy = encoder.predict_on_batch(inputs)
+        
         for batch_idx in range(batch_size):
             global_idx = iteration * batch_size + batch_idx
             label, rec, lig = paths[global_idx]
@@ -134,7 +147,11 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
     remainder = total_size % batch_size
     batch = e.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
-    _, encodings_numpy = encoder.predict_on_batch(input_tensor.tonumpy())
+    
+    inputs = [input_tensor.tonumpy()]
+    if composite:
+        inputs.append(tf.constant(1., shape=(batch_size,)))
+    _, encodings_numpy = encoder.predict_on_batch(inputs)
 
     for batch_idx in range(remainder):
         global_idx = iterations * batch_size + batch_idx
