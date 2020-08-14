@@ -146,7 +146,7 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
         encodings.append((label, lig, encodings_numpy[batch_idx, :]))
 
     if len(encodings):  # Encodings that have not been saved (final receptor)
-        write_encodings_to_disk(current_rec, encodings, encodings_dir)
+        write_encodings_to_disk(current_rec, encodings)
 
 
 if __name__ == '__main__':
