@@ -80,7 +80,7 @@ def main(args):
         print('Embeddings sucessfully extracted')
         
         classifier = RandomForestClassifier(
-            n_estimators=500, oob_score=True, n_jobs=-1)
+            n_estimators=500, oob_score=True, n_jobs=-1, verbose=2)
         with Timer() as t:
             classifier.fit(embeddings_arr, labels)
         print('Training complete in {0:0.3f} s'.format(t.interval))
