@@ -188,18 +188,9 @@ class AutoEncoderBase(tf.keras.Model):
                 documentation)
         """
 
-        optimisers = {
-            'sgd': tf.keras.optimizers.SGD,
-            'adadelta': tf.keras.optimizers.Adadelta,
-            'adagrad': tf.keras.optimizers.Adagrad,
-            'rmsprop': tf.keras.optimizers.RMSprop,
-            'adamax': tf.keras.optimizers.Adamax,
-            'adam': tf.keras.optimizers.Adam
-        }
-
         # If optimiser is a string, turn it into a keras optimiser object
         if isinstance(optimiser, str):
-            optimiser = optimisers.get(optimiser, tf.keras.optimizers.SGD)
+            optimiser = tf.keras.optimizers.get(optimiser)
 
         inputs = [self.input_image]
         if loss == 'composite_mse':
