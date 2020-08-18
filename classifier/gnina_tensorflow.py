@@ -18,8 +18,10 @@ import os
 import time
 
 from classifier.inference import inference
-from classifier.model_definitions import define_baseline_model, define_densefs_model
-from utilities.gnina_functions import process_batch, beautify_config
+from classifier.model_definitions import define_baseline_model, \
+    define_densefs_model
+from utilities.gnina_functions import process_batch, beautify_config, \
+    print_with_overwrite
 from pathlib import Path
 from tensorflow.keras.utils import plot_model
 
@@ -150,7 +152,8 @@ def main():
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(loss_history_fname, 'w') as f:
             f.write(losses_string)
-        print(iteration, 'loss: {0:0.3f}'.format(loss))
+        print_with_overwrite('Iteration: {0} | loss: {1:0.4f}'.format(
+            iteration, loss))
 
     # Save model for later inference
     checkpoint_path = savepath / 'checkpoints' / 'final_model_{}'.format(

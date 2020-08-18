@@ -21,7 +21,8 @@ import tensorflow as tf
 from collections import defaultdict
 from pathlib import Path
 from utilities import gnina_embeddings_pb2
-from utilities.gnina_functions import get_test_info, Timer, process_batch
+from utilities.gnina_functions import get_test_info, Timer, process_batch, \
+    print_with_overwrite
 
 
 def inference(model, test_types, data_root, savepath, batch_size,
@@ -55,7 +56,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
     
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
     e_test = molgrid.ExampleProvider(
-        data_root=data_root, balanced=False, shuffle=False)
+        data_root=str(data_root), balanced=False, shuffle=False)
     e_test.populate(test_types)
 
     paths, size = get_test_info(test_types)  # For indexing in output
@@ -81,8 +82,9 @@ def inference(model, test_types, data_root, savepath, batch_size,
     with open(predictions_fname, 'w') as f:
         f.write('')
         
+    iterations = size // batch_size
     with Timer() as t:
-        for iteration in range(size // batch_size):
+        for iteration in range(iterations):
             labels_numpy, predictions = process_batch(
                 model, e_test, gmaker, input_tensor, labels_tensor=labels, 
                 train=False)
@@ -103,6 +105,8 @@ def inference(model, test_types, data_root, savepath, batch_size,
                 with open(predictions_fname, 'a') as f:
                     f.write(test_output_string)
                 test_output_string = ''
+            print_with_overwrite('Iteration: {0}/{1}'.format(
+                iteration + 1, iterations + int(size % batch_size)))
 
         remainder = size % batch_size            
         labels_numpy, predictions = process_batch(
@@ -123,7 +127,9 @@ def inference(model, test_types, data_root, savepath, batch_size,
             )
         with open(predictions_fname, 'a') as f:
             f.write(test_output_string[:-1])
-
+        print_with_overwrite('Iteration: {0}/{1}'.format(
+            iterations + int(size % batch_size),
+            iterations + int(size % batch_size)))
 
     print('Total inference time:', t.interval, 's')
 
