@@ -21,7 +21,7 @@ def test_get_test_info():
     """
     test_fname = 'data/small_chembl_test.types'
     paths, size = gf.get_test_info(test_fname)
-    assert size == 510
+    assert size == 7070
     with open(test_fname, 'r') as f:
         for idx, line in enumerate(f.readlines()):
             assert paths[idx][0] == line.split()[1]
