@@ -230,9 +230,7 @@ class AutoEncoderBase(tf.keras.Model):
     def _define_activations(self):
         """Returns dict from strings to final layer activations objects."""
 
-        return {'sigmoid': 'sigmoid',
-                'relu': 'relu',
-                'heaviside': approx_heaviside}
+        return { 'heaviside': approx_heaviside }
 
 
 class AutoEncoder(AutoEncoderBase):
@@ -425,13 +423,13 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         """
 
         activations = super(SingleLayerAutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, 'linear')
+        activation = activations.get(final_activation, activation)
 
         self.input_image = Input(shape=dims, dtype=tf.float32,
                                  name='input_image')
         x = Flatten()(self.input_image)
         self.encoding = Dense(
-            encoding_size, name='encoding', activation='relu')(x)
+            encoding_size, name='encoding', activation='selu')(x)
         x = Dense(np.prod(dims),
                   activation=activation)(self.encoding)
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
