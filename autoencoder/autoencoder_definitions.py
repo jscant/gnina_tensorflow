@@ -190,7 +190,7 @@ class AutoEncoderBase(tf.keras.Model):
 
         # If optimiser is a string, turn it into a keras optimiser object
         if isinstance(optimiser, str):
-            optimiser = tf.keras.optimizers.get(optimiser)
+            optimiser = tf.keras.optimizers.get(optimiser).__class__
 
         inputs = [self.input_image]
         if loss == 'composite_mse':
@@ -255,73 +255,22 @@ class AutoEncoder(AutoEncoderBase):
         """
 
         activations = super(AutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, 'linear')
-
-        self.input_image = Input(shape=dims, dtype=tf.float32, name='input')
-        x = Conv3D(32, 3, padding='SAME', activation='relu',
-                   data_format='channels_first')(self.input_image)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = MaxPooling3D(2, 2, data_format='channels_first')(x)
-        x = Conv3D(64, 3, padding='SAME', activation='relu',
-                   data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = MaxPooling3D(2, 2, data_format='channels_first')(x)
-        x = Conv3D(128, 3, padding='SAME', activation='relu',
-                   data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = MaxPooling3D(2, 2, data_format='channels_first')(x)
-        x = Conv3D(256, 3, padding='SAME', activation='relu',
-                   data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = Conv3D(256, 3, padding='SAME', activation='relu',
-                   data_format='channels_first')(x)
-        x = MaxPooling3D(2, 2, data_format='channels_first')(x)
-
-        final_shape = x.shape
-        flattened = Flatten(data_format='channels_first')(x)
-
+        final_activation = activations.get(final_activation, final_activation)
+        
+        self.input_image = Input(
+            shape=dims, dtype=tf.float32, name='input_image')
+        
+        x = Flatten()(self.input_image)
+        x = Dense(2000, activation='selu')(x)
+        
         self.encoding = Dense(
-            encoding_size, name='encoding', activation='sigmoid')(flattened)
-
-        decode = Dense(reduce(mul, final_shape[1:]))(self.encoding)
-        reshaped = Reshape(final_shape[1:])(decode)
-        x = UpSampling3D(
-            size=(2, 2, 2), data_format='channels_first')(reshaped)
-        x = Conv3DTranspose(128, 3, padding='SAME', activation='relu',
-                            data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = UpSampling3D(
-            size=(2, 2, 2), data_format='channels_first')(x)
-        x = Conv3DTranspose(64, 3, padding='SAME', activation='relu',
-                            data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = UpSampling3D(
-            size=(2, 2, 2), data_format='channels_first')(x)
-        x = Conv3DTranspose(32, 3, padding='SAME', activation='relu',
-                            data_format='channels_first')(x)
-        x = BatchNormalization(
-            axis=4, epsilon=1.001e-5,
-            moving_mean_initializer=tf.constant_initializer(0.999))(x)
-        x = UpSampling3D(
-            size=(2, 2, 2), data_format='channels_first')(x)
-
-        self.reconstruction = Conv3DTranspose(
-            dims[0], 3, padding='SAME',
-            activation=activation,
-            data_format='channels_first', name='reconstruction')(x)
-
+            encoding_size, activation='selu', name='encoding')(x)
+        
+        x = Dense(2000, activation='selu')(self.encoding)        
+        x = Dense(np.prod(dims), activation=final_activation)(x)
+        
+        self.reconstruction = Reshape(dims, name='reconstruction')(x)
+        
         super(AutoEncoder, self).__init__(
             optimiser, loss, opt_args
         )
@@ -347,9 +296,10 @@ class DenseAutoEncoder(AutoEncoderBase):
                 documentation)"""
 
         activations = super(DenseAutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, 'linear')
+        activation = activations.get(final_activation, final_activation)
 
-        self.input_image = Input(shape=dims, dtype=tf.float32)
+        self.input_image = Input(
+            shape=dims, dtype=tf.float32, name='input_image')
 
         # Hidden layers
         x = MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2),
@@ -423,7 +373,7 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         """
 
         activations = super(SingleLayerAutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, activation)
+        activation = activations.get(final_activation, final_activation)
 
         self.input_image = Input(shape=dims, dtype=tf.float32,
                                  name='input_image')
