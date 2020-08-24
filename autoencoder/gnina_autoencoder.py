@@ -18,9 +18,8 @@ from autoencoder import autoencoder_definitions
 from matplotlib import pyplot as plt
 from pathlib import Path
 from autoencoder.calculate_encodings import calculate_encodings
-from utilities.gnina_functions import Timer, format_time, print_with_overwrite
 from tensorflow.python.util import deprecation
-
+from utilities.gnina_functions import Timer, format_time, print_with_overwrite
 
 def main():
     
