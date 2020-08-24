@@ -8,6 +8,7 @@ Created on Fri Jul 10 14:47:44 2020
 import datetime
 import math
 import shutil
+import tensorflow as tf
 import time
 
 
@@ -119,7 +120,7 @@ def get_test_info(test_file):
 
 
 def process_batch(model, example_provider, gmaker, input_tensor,
-                  labels_tensor=None, train=True):
+                  labels_tensor=None, train=True, autoencoder=None):
     """Feeds forward and backpropagates (if train==True) batch of examples.
 
     Arguments:
@@ -147,16 +148,30 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     if train and labels_tensor is None:
         raise RuntimeError('Labels must be provided for backpropagation',
                            'if train == True')
-    batch = example_provider.next_batch(input_tensor.shape[0])
+        
+    batch_size = input_tensor.shape[0]
+    batch = example_provider.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=train)
+    
+    if autoencoder is not None:
+        inputs = [input_tensor.tonumpy()]
+        try:
+            autoencoder.get_layer('frac')
+        except ValueError:
+            pass
+        else:
+            inputs.append(tf.constant(1., shape=(batch_size,)))
+        gnina_input, _ = autoencoder.predict_on_batch(inputs)
+    else:
+        gnina_input = input_tensor.tonumpy()
 
     if labels_tensor is None:  # We don't know labels; just return predictions
-        return model.predict_on_batch(input_tensor.tonumpy())
+        return model.predict_on_batch(gnina_input)
 
     batch.extract_label(0, labels_tensor)  # y_true
     if train:  # Return loss
         return model.train_on_batch(
-            input_tensor.tonumpy(), labels_tensor.tonumpy())
+            gnina_input, labels_tensor.tonumpy())
     else:  # Return labels, predictions
         return (labels_tensor.tonumpy(),
-                model.predict_on_batch(input_tensor.tonumpy()))
+                model.predict_on_batch(gnina_input))

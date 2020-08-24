@@ -26,7 +26,7 @@ from utilities.gnina_functions import get_test_info, Timer, process_batch, \
 
 
 def inference(model, test_types, data_root, savepath, batch_size,
-              gmaker=None, input_tensor=None, labels=None):
+              gmaker=None, input_tensor=None, labels=None, autoencoder=None):
     """Use trained keras model to perform inference on gnina input data.
     
     The model should take a four dimentional tensor as input, with
@@ -87,7 +87,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
         for iteration in range(iterations):
             labels_numpy, predictions = process_batch(
                 model, e_test, gmaker, input_tensor, labels_tensor=labels, 
-                train=False)
+                train=False, autoencoder=autoencoder)
             representations = [p.flatten() for p in predictions[1]]
             predictions = predictions[0]
             for i in range(batch_size):
@@ -111,7 +111,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
         remainder = size % batch_size            
         labels_numpy, predictions = process_batch(
             model, e_test, gmaker, input_tensor, labels_tensor=labels,
-            train=False)
+            train=False, autoencoder=autoencoder)
         representations = [p.flatten() for p in predictions[1]]
         predictions = predictions[0]
         for i in range(remainder):

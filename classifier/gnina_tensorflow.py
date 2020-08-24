@@ -17,6 +17,7 @@ import numpy as np
 import os
 import time
 
+from autoencoder.autoencoder_definitions import pickup
 from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
     define_densefs_model
@@ -47,6 +48,13 @@ def main():
         '--use_densenet_bc', action='store_true')
     parser.add_argument(
         '--inference_on_training_set', action='store_true')
+    parser.add_argument(
+        '--autoencoder', type=str, required=False, help=
+        'Use trained autoencoder reconstruction as inputs for training and testing')
+    parser.add_argument(
+        '--dimension', type=float, required=False, default=18.0)
+    parser.add_argument(
+        '--resolution', type=float, required=False, default=1.0)
     args = parser.parse_args()
 
     # We need to train or test
@@ -94,6 +102,8 @@ def main():
     config_args['inference_on_training_set'] = args.inference_on_training_set
     beautify_config(config_args)
     
+    autoencoder = pickup(args.autoencoder) if isinstance(args.autoencoder, str) else None
+    
     if args.use_cpu:
         molgrid.set_gpu_enabled(False)
     else:
@@ -107,7 +117,7 @@ def main():
     
     e.populate(str(train_types))
 
-    gmaker = molgrid.GridMaker()
+    gmaker = molgrid.GridMaker(dimension=args.dimension, resolution=args.resolution)
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (batch_size,) + dims
 
@@ -143,7 +153,7 @@ def main():
         
         # Data: e > gmaker > input_tensor > network (forward and backward pass)
         loss = process_batch(model, e, gmaker, input_tensor, labels,
-                             train=True)
+                             train=True, autoencoder=autoencoder)
 
         # Save losses to disk
         if not isinstance(loss, float):
@@ -173,12 +183,12 @@ def main():
     # Perform inference on training set if required
     if args.inference_on_training_set:
         inference(model, train_types, data_root, savepath, batch_size,
-                  gmaker, input_tensor, labels)
+                  gmaker, input_tensor, labels, autoencoder)
 
     # Perform inference if test types file is provided
     if test_types is not None:
         inference(model, test_types, data_root, savepath, batch_size,
-                  gmaker, input_tensor, labels)
+                  gmaker, input_tensor, labels, autoencoder)
         
 
 if __name__ == '__main__':
