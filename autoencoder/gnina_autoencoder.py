@@ -121,8 +121,8 @@ def main():
         batch = e.next_batch(args.batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
-        input_tensor_numpy = input_tensor.tonumpy()
-
+        input_tensor_numpy = np.minimum(input_tensor.tonumpy(), 1.0)
+        
         mean_nonzero = np.mean(
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
