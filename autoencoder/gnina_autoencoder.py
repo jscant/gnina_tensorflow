@@ -153,7 +153,6 @@ def main():
         loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
             iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero)
 
-
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1)
         time_remaining = time_per_iter * (args.iterations - iteration - 1)

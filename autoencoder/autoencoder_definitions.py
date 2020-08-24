@@ -21,11 +21,6 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
 
 
-def long_sigmoid(x):
-    """2.3 times the sigmoid function."""
-    return tf.math.multiply(2.3, tf.nn.sigmoid(x))
-
-
 def nonzero_mse(target, reconstruction):
     """Mean squared error for non-zero values in the target matrix
 
@@ -293,7 +288,8 @@ class DenseAutoEncoder(AutoEncoderBase):
             loss: loss function (string or keras loss object)
             final_activation: activation function for final layer
             opt_args: arguments for the keras optimiser (see keras
-                documentation)"""
+                documentation)
+        """
 
         activations = super(DenseAutoEncoder, self)._define_activations()
         activation = activations.get(final_activation, final_activation)
