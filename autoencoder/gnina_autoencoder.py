@@ -6,7 +6,6 @@ Created on Tue Jun 23 14:45:32 2020
 gnina inputs.
 """
 
-import torch
 from math import isnan
 import molgrid
 import numpy as np
