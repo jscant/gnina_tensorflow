@@ -30,37 +30,73 @@ from tensorflow.keras.utils import plot_model
 def main():
     # Create and parse command line args
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_root", type=str, required=False,
-                        default=Path.home())
-    parser.add_argument("--train", type=str, required=False)
-    parser.add_argument('--test', type=str, required=False)
-    parser.add_argument('--densefs', '-d', action='store_true')
     parser.add_argument(
-        '--iterations', '-i', type=int, required=False, default=25000)
+        '--data_root', '-r', type=str, required=False, default=Path.home(),
+        help=('Path relative to which all paths in specified types files will '
+              'be taken')
+        )
     parser.add_argument(
-        '--batch_size', '-b', type=int, required=False, default=16)
+        '--train', type=str, required=True,
+        help=('Types file containing training examples including label, '
+              'receptor path and ligand path')
+        )
     parser.add_argument(
-        '--save_path', '-s', type=str, required=False, default='.')
-    parser.add_argument('--save_interval', type=int, default=10000)
+        '--test', type=str, required=False, help=(
+            'Types file containing training examples including label, receptor'
+            'path and ligand path')
+        )
     parser.add_argument(
-    '--use_cpu', '-g', action='store_true')
+        '--densefs', '-d', action='store_true',
+        help='Use DenseFS rather than Gnina (baseline)')
     parser.add_argument(
-        '--use_densenet_bc', action='store_true')
+        '--iterations', '-i', type=int, required=False, default=25000,
+        help='Number of batches to train on')
     parser.add_argument(
-        '--inference_on_training_set', action='store_true')
+        '--batch_size', '-b', type=int, required=False, default=16,
+        help='Number of training examples in each batch')
     parser.add_argument(
-        '--autoencoder', type=str, required=False, help=
-        'Use trained autoencoder reconstruction as inputs for training and testing')
+        '--save_path', '-s', type=str, required=False, default='.',
+        help=('Directory where named folder will be created, in which '
+              'results, models and config will be saved')
+        )
     parser.add_argument(
-        '--dimension', type=float, required=False, default=23.0)
+        '--save_interval', type=int, default=10000,
+        help='How often to save a snapshot of the model during training')
     parser.add_argument(
-        '--resolution', type=float, required=False, default=0.5)
+        '--use_cpu', '-g', action='store_true', help='Use CPU (not GPU)')
     parser.add_argument(
-        '--ligmap', type=str, required=False)
+        '--use_densenet_bc', action='store_true',
+        help='Use updated definition of DenseNet blocks (DenseNet-BC)')
     parser.add_argument(
-        '--recmap', type=str, required=False)
+        '--inference_on_training_set', action='store_true',
+        help='Perform inference on training set')
     parser.add_argument(
-        '--name', type=str, required=False)
+        '--autoencoder', type=str, required=False,
+        help=('Use trained autoencoder reconstruction as inputs for training '
+              'and testing')
+        )
+    parser.add_argument(
+        '--dimension', type=float, required=False, default=23.0,
+        help=('Size of cube containing receptor atoms centred on ligand in '
+              'Angstroms (default=23.0)')
+        )
+    parser.add_argument(
+        '--resolution', type=float, required=False, default=0.5,
+        help='Length of the side of each voxel in Angstroms (default=0.5)')
+    parser.add_argument(
+        '--ligmap', type=str, required=False,
+        help=('Text file containing space-delimited line with atom categories '
+              'for each ligand channel input')
+        )
+    parser.add_argument(
+        '--recmap', type=str, required=False
+        help=('Text file containing space-delimited line with atom categories '
+              'for each receptor channel input'))
+    parser.add_argument(
+        '--name', type=str, required=False,
+        help=('Name of folder to store results (default is current UTC time '
+              'in seconds)')
+        )
     parser.add_argument(
         '--seed', type=int, required=False,
         default=np.random.randint(0, int(1e7)),
