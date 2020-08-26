@@ -52,13 +52,15 @@ def main():
         '--autoencoder', type=str, required=False, help=
         'Use trained autoencoder reconstruction as inputs for training and testing')
     parser.add_argument(
-        '--dimension', type=float, required=False, default=18.0)
+        '--dimension', type=float, required=False, default=23.0)
     parser.add_argument(
-        '--resolution', type=float, required=False, default=1.0)
+        '--resolution', type=float, required=False, default=0.5)
     parser.add_argument(
         '--ligmap', type=str, required=False)
     parser.add_argument(
         '--recmap', type=str, required=False)
+    parser.add_argument(
+        '--name', type=str, required=False)
     args = parser.parse_args()
 
     # We need to train or test
@@ -76,42 +78,27 @@ def main():
 
     data_root = Path(args.data_root).resolve()
     train_types = Path(args.train).resolve()
-    test_types = args.test
-    use_densefs = args.densefs
-    batch_size = args.batch_size
-    iterations = args.iterations
+    test_types = Path(args.test).resolve() if args.test is not None else None
     
-    folder = os.getenv('SLURM_JOB_ID')
-    if not isinstance(folder, str):
-        folder = str(int(time.time()))
+    if args.name is None:
+        folder = os.getenv('SLURM_JOB_ID')
+        if not isinstance(folder, str):
+            folder = str(int(time.time()))
+    else:
+        folder = args.name
     
-    savepath = Path(args.save_path, folder).resolve()
-    save_interval = args.save_interval
+    args.save_path = Path(args.save_path, folder).resolve()
     
     seed = np.random.randint(0, int(1e7))
     molgrid.set_random_seed(seed)
 
-    # Create config dict for saving to disk later
-    config_args['data_root'] = data_root
-    config_args['train'] = train_types if train_types else 'NONE'
-    config_args['test'] = test_types if test_types else 'NONE'
-    config_args['model'] = ['baseline', 'densefs'][use_densefs]
-    config_args['batch_size'] = batch_size
-    config_args['iterations'] = iterations
-    config_args['save_path'] = savepath
-    config_args['save_interval'] = save_interval
-    config_args['use_cpu'] = args.use_cpu
-    config_args['use_densenet_bc'] = args.use_densenet_bc
-    config_args['random_seed'] = seed
-    config_args['inference_on_training_set'] = args.inference_on_training_set
-    beautify_config(config_args)
+    # If specified, use autoencoder reconstructions to train/test
+    autoencoder = None    
+    if isinstance(args.autoencoder, str):    
+        autoencoder = pickup(args.autoencoder)
     
-    autoencoder = pickup(args.autoencoder) if isinstance(args.autoencoder, str) else None
-    
-    if args.use_cpu:
-        molgrid.set_gpu_enabled(False)
-    else:
-        molgrid.set_gpu_enabled(True)
+    # Use cpu rather than gpu if specified
+    molgrid.set_gpu_enabled(1 - args.use_cpu)
 
     gap = 100  # Window to average training loss over (in batches)
 
@@ -126,37 +113,42 @@ def main():
             rec_typer, lig_typer, data_root=str(data_root),
             balanced=True, shuffle=True)
     
-    e.populate(str(train_types))
+    e.populate(str(args.train_types))
 
     gmaker = molgrid.GridMaker(dimension=args.dimension, resolution=args.resolution)
     dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (batch_size,) + dims
+    tensor_shape = (args.batch_size,) + dims
 
-    labels = molgrid.MGrid1f(batch_size)
+    labels = molgrid.MGrid1f(args.batch_size)
     input_tensor = molgrid.MGrid5f(*tensor_shape)
 
-    checkpoints_dir = savepath / 'checkpoints'
+    checkpoints_dir = args.save_path / 'checkpoints'
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
     # We are ready to define our model and train
     losses = []
-    if use_densefs:
+    if args.densefs:
         model = define_densefs_model(dims, bc=args.use_densenet_bc)
     else:
         model = define_baseline_model(dims)
 
-    model_str = ['Baseline', 'DenseFS'][use_densefs]
-    plot_model(model, savepath / 'model.png', show_shapes=True)
-    beautify_config(config_args, savepath / 'config')
+    arg_str = '\n'.join(
+        ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
+    model_str = ['Baseline', 'DenseFS'][args.densefs]
+    plot_model(model, args.save_path / 'model.png', show_shapes=True)
     model.summary()
+    with open(args.save_path / 'config', 'w') as f:
+        f.write(arg_str)
+    print(arg_str)
 
     losses_string = ''
     loss_history_fname = Path(
-        savepath, 'loss_history_{}.txt'.format(model_str.lower()))
-    for iteration in range(iterations):
-        if not (iteration + 1) % save_interval and iteration < iterations - 1:
+        args.save_path, 'loss_history_{}.txt'.format(model_str.lower()))
+    for iteration in range(args.iterations):
+        if (not (iteration + 1) % args.save_interval and
+            iteration < args.iterations - 1):
             checkpoint_path = Path(
-                savepath,
+                args.save_path,
                 'checkpoints',
                 'ckpt_model_{}'.format(iteration + 1))
             
@@ -177,30 +169,33 @@ def main():
             iteration, loss))
 
     # Save model for later inference
-    checkpoint_path = savepath / 'checkpoints' / 'final_model_{}'.format(
-            iterations)
+    checkpoint_path = args.save_path / 'checkpoints' / 'final_model_{}'.format(
+            args.iterations)
     model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
     losses = [np.mean(losses[window:window + gap])
-              for window in np.arange(0, iterations, step=gap)]
-    plt.plot(np.arange(0, iterations, gap), losses)
+              for window in np.arange(0, args.iterations, step=gap)]
+    plt.plot(np.arange(0, args.iterations, gap), losses)
     plt.legend([model_str])
     plt.title('Cross-entropy loss history for {} network'.format(
         model_str))
-    plt.savefig(savepath / 'densefs_loss.png')
+    plt.savefig(args.save_path / 'densefs_loss.png')
     print('Finished {}\n\n'.format(model_str))
     
     # Perform inference on training set if required
     if args.inference_on_training_set:
-        inference(model, train_types, data_root, savepath, batch_size,
-                  gmaker, input_tensor, labels, autoencoder)
+        inference(
+            model, train_types, data_root, args.save_path, args.batch_size,
+            gmaker, input_tensor, labels, autoencoder, ligmap=args.ligmap,
+            recmap=args.recmap)
 
     # Perform inference if test types file is provided
     if test_types is not None:
-        inference(model, test_types, data_root, savepath, batch_size,
-                  gmaker, input_tensor, labels, autoencoder,
-                  ligmap=args.ligmap, recmap=args.recmap)
+        inference(
+            model, test_types, data_root, args.save_path, args.batch_size,
+            gmaker, input_tensor, labels, autoencoder, ligmap=args.ligmap,
+            recmap=args.recmap)
         
 
 if __name__ == '__main__':
