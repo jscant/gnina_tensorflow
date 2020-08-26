@@ -256,12 +256,12 @@ class AutoEncoder(AutoEncoderBase):
             shape=dims, dtype=tf.float32, name='input_image')
         
         x = Flatten()(self.input_image)
-        x = Dense(2000, activation='sigmoid')(x)
+        x = Dense(4000, activation='sigmoid')(x)
         
         self.encoding = Dense(
             encoding_size, activation='sigmoid', name='encoding')(x)
         
-        x = Dense(2000, activation='sigmoid')(self.encoding)        
+        x = Dense(4000, activation='sigmoid')(self.encoding)        
         x = Dense(np.prod(dims), activation=final_activation)(x)
         
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
@@ -566,6 +566,7 @@ def parse_command_line_args(test_or_train='train'):
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
+    parser.add_argument('--name', type=str, required=False)
     parser.add_argument(
         '--verbose', action='store_true',
         help='Do not suppress deprecation messages and other tf warnings')

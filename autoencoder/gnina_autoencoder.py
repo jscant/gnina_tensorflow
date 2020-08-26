@@ -40,14 +40,17 @@ def main():
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
 
-    slurm_job_id = os.getenv('SLURM_JOB_ID')
-    if isinstance(slurm_job_id, str):
-        slurm_log_file = Path.home() / 'slurm_{}.out'.format(slurm_job_id)
-        arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
-            slurm_job_id, slurm_log_file)
-        save_path = Path(args.save_path, slurm_job_id).resolve()
+    if args.name is None:
+        slurm_job_id = os.getenv('SLURM_JOB_ID')
+        if isinstance(slurm_job_id, str):
+            slurm_log_file = Path.home() / 'slurm_{}.out'.format(slurm_job_id)
+            arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
+                slurm_job_id, slurm_log_file)
+            save_path = Path(args.save_path, slurm_job_id).resolve()
+        else:
+            save_path = Path(args.save_path, str(int(time.time()))).resolve()
     else:
-        save_path = Path(args.save_path, str(int(time.time()))).resolve()
+        save_path = Path(args.save_path, args.name).resolve()
 
     if args.momentum > 0 and args.optimiser.lower() not in ['sgd', 'rmsprop']:
         raise RuntimeError(

@@ -159,7 +159,7 @@ if __name__ == '__main__':
     
     # Load some parameters from orginal model config
     config = Path(args.model_dir).parents[1] / 'config'
-    recmap, ligmap = None, None
+    recmap, ligmap = 'None', 'None'
     gridmaker_args = { 'dimension': None, 'resolution': None }
     with open(config, 'r') as f:
         for line in f.readlines():
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     molgrid.set_gpu_enabled(1-int(args.use_cpu))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
-    if recmap is not None and ligmap is not None:
+    if recmap != 'None' and ligmap != 'None':
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e = molgrid.ExampleProvider(
