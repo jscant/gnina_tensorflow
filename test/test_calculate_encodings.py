@@ -37,7 +37,7 @@ def wipe_directory(directory):
 
 def test_calculate_encodings():
     autoencoder = tf.keras.models.load_model(
-        'test/trained_autoencoder',
+        'test/models/test_autoencoder',
         custom_objects={
             'zero_mse': autoencoder_definitions.zero_mse,
             'nonzero_mse': autoencoder_definitions.nonzero_mse,
@@ -45,10 +45,11 @@ def test_calculate_encodings():
             'nonzero_mae': autoencoder_definitions.nonzero_mae,
             'zero_mae': autoencoder_definitions.zero_mae,
             'approx_heaviside': autoencoder_definitions.approx_heaviside,
-            'unbalanced_loss': autoencoder_definitions.unbalanced_loss,
         }
     )
     
+    ligmap = 'test/resources/gnina35.ligmap'
+    recmap = 'test/resources/gnina35.recmap'
     batch_size = 16
     temporary_directory = Path('test/tmp_save_path')
     test_types = 'data/small_chembl_test.types'
@@ -56,8 +57,10 @@ def test_calculate_encodings():
     tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
+    rec_typer = molgrid.FileMappedGninaTyper(recmap)
+    lig_typer = molgrid.FileMappedGninaTyper(ligmap)
     e = molgrid.ExampleProvider(
-        data_root='data', balanced=False, shuffle=False)
+        rec_typer, lig_typer, data_root='data', balanced=False, shuffle=False)
     e.populate(test_types)
 
     gmaker = molgrid.GridMaker(dimension=18.0, resolution=1.0)
@@ -69,7 +72,8 @@ def test_calculate_encodings():
     calculate_encodings(
         autoencoder, gmaker, input_tensor, 'data',
         test_types, save_path=temporary_directory,
-        rotate=False)
+        rotate=False, verbose=False, ligmap=ligmap,
+        recmap=recmap)
     
     labels = defaultdict(lambda: defaultdict(lambda: None))
     with open(test_types, 'r') as f:
@@ -87,10 +91,7 @@ def test_calculate_encodings():
         for ligand_struct in encodings.ligand:
             label = ligand_struct.label
             ligand_path = ligand_struct.path
-            assert np.array(ligand_struct.embedding).shape == (500, )
+            assert np.array(ligand_struct.embedding).shape == (5, )
             assert labels[rec_path][ligand_path] == label
             
     wipe_directory(temporary_directory)
-    
-    
-test_calculate_encodings()

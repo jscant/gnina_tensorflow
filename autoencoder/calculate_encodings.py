@@ -20,7 +20,8 @@ from utilities import gnina_embeddings_pb2, gnina_functions
 
 
 def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
-                        save_path, rotate=False, verbose=False):
+                        save_path, rotate=False, verbose=False, ligmap=None,
+                        recmap=None):
     """Calculates encodings for gnina inputs.
 
     Uses trained AutoEncoder object to calculate the encodings of all gnina
@@ -33,6 +34,9 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
             inputs which are to be encoded in a lower dimensional space
         rotate: whether to randomly rotate gnina inputs in increments of 15
             degrees
+        verbose: if False, suppress tensorflow warnings
+        ligmap: Text file containing definitions of ligand input channels
+        recmap: Text file containing definitions of receptor input channels
 
     Returns:
         Dictionary of serialised protein protobuf messages with structure
@@ -83,8 +87,16 @@ def calculate_encodings(encoder, gmaker, input_tensor, data_root, types_file,
 
     # Setup for gnina
     batch_size = input_tensor.shape[0]
-    e = molgrid.ExampleProvider(data_root=str(data_root), balanced=False,
-                                shuffle=False)
+    
+    if recmap is not None and ligmap is not None:
+        rec_typer = molgrid.FileMappedGninaTyper(recmap)
+        lig_typer = molgrid.FileMappedGninaTyper(ligmap)
+        e = molgrid.ExampleProvider(
+            rec_typer, lig_typer, data_root=str(data_root), balanced=False,
+            shuffle=False)
+    else:
+        e = molgrid.ExampleProvider(
+            data_root=str(data_root), balanced=False, shuffle=False)
     e.populate(str(types_file))
 
     # Need a dictionary mapping {global_idx: (label, rec, lig) where global_idx

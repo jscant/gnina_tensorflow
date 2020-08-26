@@ -66,10 +66,17 @@ def main():
     tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
-    e = molgrid.ExampleProvider(
-        data_root=str(args.data_root), balanced=False, shuffle=True)
+    if args.ligmap is None or args.recmap is None:
+        e = molgrid.ExampleProvider(
+            data_root=str(args.data_root), balanced=False, shuffle=True)
+    else:
+        rec_typer = molgrid.FileMappedGninaTyper(args.recmap)
+        lig_typer = molgrid.FileMappedGninaTyper(args.ligmap)
+        e = molgrid.ExampleProvider(
+            rec_typer, lig_typer, data_root=str(args.data_root),
+            balanced=False, shuffle=True)
     e.populate(str(args.train))
-
+    
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,
         dimension=args.dimension,

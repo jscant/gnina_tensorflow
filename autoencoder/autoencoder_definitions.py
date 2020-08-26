@@ -544,7 +544,9 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--resolution', type=float, required=False, default=1.0)
         parser.add_argument(
-        '--save_encodings', action='store_true')
+            '--save_encodings', action='store_true')
+        parser.add_argument('--recmap', type=str, required=False)
+        parser.add_argument('--ligmap', type=str, required=False)
     else:
         parser.add_argument(
             '--load_model', type=str, action=LoadConfigTest, help=
