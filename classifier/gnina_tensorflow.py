@@ -89,7 +89,7 @@ def main():
               'for each ligand channel input')
         )
     parser.add_argument(
-        '--recmap', type=str, required=False
+        '--recmap', type=str, required=False,
         help=('Text file containing space-delimited line with atom categories '
               'for each receptor channel input'))
     parser.add_argument(
@@ -152,7 +152,7 @@ def main():
             rec_typer, lig_typer, data_root=str(data_root),
             balanced=True, shuffle=True)
     
-    e.populate(str(args.train_types))
+    e.populate(str(train_types))
 
     gmaker = molgrid.GridMaker(dimension=args.dimension, resolution=args.resolution)
     dims = gmaker.grid_dimensions(e.num_types())
