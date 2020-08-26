@@ -51,18 +51,13 @@ def test_process_batch():
     
     model = define_baseline_model(dims)    
     
-    y_true, outputs = gf.process_batch(
+    y_true, y_pred = gf.process_batch(
         model, e, gmaker, input_tensor, labels, train=False)
-    
-    y_pred, final_layer = outputs
     
     assert len(y_true) == 4
     assert y_pred.shape == (batch_size, 2)
-    n_embeddings, _ = final_layer.shape
-    assert n_embeddings == batch_size
     
     y_pred_sums = np.sum(y_pred, axis=1)
-    
     assert y_pred_sums == pytest.approx(1.0)
     
 
