@@ -70,34 +70,6 @@ def print_with_overwrite(s):
     print((ERASE + UP_ONE)*(n_lines-1) + s, end='\r', flush=True)
 
 
-def beautify_config(config, fname=None):
-    """Formats dictionary into two columns, sorted in alphabetical order.
-
-    Arguments:
-        config: any dictionary
-        fname: string containing valid path to filename for writing beautified
-            config to. If left blank, output will be printed to stdout.
-    """
-    output = 'Time of experiment generation: {:%d-%m-%Y %H:%M:%S}\n\n'.format(
-        datetime.datetime.now())
-
-    sorted_config = sorted(
-        [(arg, value) for arg, value in config.items()], key=lambda x: x[0]
-    )
-
-    # Padding magic
-    max_len = max([len(i) for i in [arg for arg, _ in sorted_config]]) + 4
-    padding = ' ' * max_len
-
-    for arg, value in sorted_config:
-        output += '{0}:{1}{2}\n'.format(arg, padding[len(arg):], value)
-    if fname is not None:
-        with open(fname, 'w') as f:
-            f.write(output[:-1])
-    else:
-        print(output)
-
-
 def get_test_info(test_file):
     """Obtains information about gninatypes file.
 

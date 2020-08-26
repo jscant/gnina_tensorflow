@@ -11,7 +11,6 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 
 import argparse
 import matplotlib.pyplot as plt
-import torch
 import molgrid
 import numpy as np
 import os
@@ -19,10 +18,8 @@ import time
 
 from autoencoder.autoencoder_definitions import pickup
 from classifier.inference import inference
-from classifier.model_definitions import define_baseline_model, \
-    define_densefs_model
-from utilities.gnina_functions import process_batch, beautify_config, \
-    print_with_overwrite, format_time
+from classifier.model_definitions import define_baseline_model, define_densefs_model
+from utilities.gnina_functions import process_batch, print_with_overwrite, format_time
 from pathlib import Path
 from tensorflow.keras.utils import plot_model
 
