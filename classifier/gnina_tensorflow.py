@@ -61,6 +61,11 @@ def main():
         '--recmap', type=str, required=False)
     parser.add_argument(
         '--name', type=str, required=False)
+    parser.add_argument(
+        '--seed', type=int, required=False,
+        default=np.random.randint(0, int(1e7)),
+        help=('Number used to seed molgrid; default is a random integer on the '
+              'interval [0, 1e7)'))
     args = parser.parse_args()
 
     # We need to train or test
@@ -89,17 +94,15 @@ def main():
     
     args.save_path = Path(args.save_path, folder).resolve()
     
-    seed = np.random.randint(0, int(1e7))
-    molgrid.set_random_seed(seed)
+    # Use cpu rather than gpu if specified
+    molgrid.set_gpu_enabled(1 - args.use_cpu)
+    molgrid.set_random_seed(args.seed)
 
     # If specified, use autoencoder reconstructions to train/test
     autoencoder = None    
     if isinstance(args.autoencoder, str):    
         autoencoder = pickup(args.autoencoder)
     
-    # Use cpu rather than gpu if specified
-    molgrid.set_gpu_enabled(1 - args.use_cpu)
-
     gap = 100  # Window to average training loss over (in batches)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
