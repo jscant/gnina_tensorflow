@@ -55,6 +55,10 @@ def main():
         '--dimension', type=float, required=False, default=18.0)
     parser.add_argument(
         '--resolution', type=float, required=False, default=1.0)
+    parser.add_argument(
+        '--ligmap', type=str, required=False)
+    parser.add_argument(
+        '--recmap', type=str, required=False)
     args = parser.parse_args()
 
     # We need to train or test
@@ -112,8 +116,15 @@ def main():
     gap = 100  # Window to average training loss over (in batches)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
-    e = molgrid.ExampleProvider(
-        data_root=str(data_root), balanced=True, shuffle=True)
+    if args.ligmap is None:
+        e = molgrid.ExampleProvider(
+            data_root=str(data_root), balanced=True, shuffle=True)
+    else:
+        rec_typer = molgrid.FileMappedGninaTyper(args.recmap)
+        lig_typer = molgrid.FileMappedGninaTyper(args.ligmap)
+        e = molgrid.ExampleProvider(
+            rec_typer, lig_typer, data_root=str(data_root),
+            balanced=True, shuffle=True)
     
     e.populate(str(train_types))
 
@@ -188,7 +199,8 @@ def main():
     # Perform inference if test types file is provided
     if test_types is not None:
         inference(model, test_types, data_root, savepath, batch_size,
-                  gmaker, input_tensor, labels, autoencoder)
+                  gmaker, input_tensor, labels, autoencoder,
+                  ligmap=args.ligmap, recmap=args.recmap)
         
 
 if __name__ == '__main__':
