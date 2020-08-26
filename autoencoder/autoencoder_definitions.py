@@ -256,12 +256,12 @@ class AutoEncoder(AutoEncoderBase):
             shape=dims, dtype=tf.float32, name='input_image')
         
         x = Flatten()(self.input_image)
-        x = Dense(2000, activation='selu')(x)
+        x = Dense(2000, activation='sigmoid')(x)
         
         self.encoding = Dense(
-            encoding_size, activation='selu', name='encoding')(x)
+            encoding_size, activation='sigmoid', name='encoding')(x)
         
-        x = Dense(2000, activation='selu')(self.encoding)        
+        x = Dense(2000, activation='sigmoid')(self.encoding)        
         x = Dense(np.prod(dims), activation=final_activation)(x)
         
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
@@ -375,7 +375,7 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                                  name='input_image')
         x = Flatten()(self.input_image)
         self.encoding = Dense(
-            encoding_size, name='encoding', activation='selu')(x)
+            encoding_size, name='encoding', activation='sigmoid')(x)
         x = Dense(np.prod(dims),
                   activation=activation)(self.encoding)
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
