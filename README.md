@@ -12,9 +12,10 @@ python3 -m pytest
 
 The following are required for all or part of gnina_tensorflow:
 ```
-scikit-learn
-joblib
-tensorflow>=2.4.0: pip install tf-nightly
+libmolgrid (https://github.com/gnina/libmolgrid)
+scikit-learn (https://github.com/scikit-learn/scikit-learn)
+joblib (https://github.com/joblib/joblib)
+tensorflow 2 (https://github.com/tensorflow/tensorflow)
 ```
 
 Please note: 3D convolutions on the data format provided by gnina do not work when running TensorFlow on a CPU. Hopefully this will change in a future release of TensorFlow.
@@ -68,7 +69,7 @@ Protein Family-Specific Models Using Deep Neural Networks and Transfer Learning 
 <a id="3">[3]</a>
 Scantlebury, J.; Brown, N.; von Delft, F.; Deane, C. M. (2020).
 Data Set Augmentation Allows Deep Learning-Based Virtual Screening to Better Generalize to Unseen Target Classes and Highlight Important Binding Interactions
-[J. Chem. Inf. Model. XX, XXXX-XXXX.](https://pubs.acs.org/doi/10.1021/acs.jcim.0c00263)
+[J. Chem. Inf. Model. 60, 3722-3730.](https://pubs.acs.org/doi/10.1021/acs.jcim.0c00263)
 
 <a id="4">[4]</a>
 Mysinger, M. M.; Carchia, M.; Irwin, J. J.; Shoichet, B. K. (2012).
