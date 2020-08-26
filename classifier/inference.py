@@ -175,13 +175,15 @@ if __name__ == '__main__':
                     gridmaker_args['resolution'] = float(chunks[1])
                     
     gridmaker_args = {i: j for i, j in gridmaker_args.items() if j is not None}
-    
+    ligmap = ligmap if ligmap != 'None' else None
+    recmap = recmap if recmap != 'None' else None
+
     tf.keras.backend.clear_session()
     
     molgrid.set_gpu_enabled(1-int(args.use_cpu))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
-    if recmap != 'None' and ligmap != 'None':
+    if recmap is not None and ligmap is not None:
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e = molgrid.ExampleProvider(
