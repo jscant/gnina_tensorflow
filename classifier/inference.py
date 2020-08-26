@@ -14,13 +14,11 @@ gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
-import torch
 import molgrid
 import tensorflow as tf
 
 from collections import defaultdict
 from pathlib import Path
-from utilities import gnina_embeddings_pb2
 from utilities.gnina_functions import get_test_info, Timer, process_batch, \
     print_with_overwrite
 
@@ -76,7 +74,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
         e_test = molgrid.ExampleProvider(
             data_root=str(data_root), balanced=False, shuffle=False)
         
-    e_test.populate(test_types)
+    e_test.populate(str(test_types))
 
     paths, size = get_test_info(test_types)  # For indexing in output
 
@@ -91,9 +89,8 @@ def inference(model, test_types, data_root, savepath, batch_size,
     if labels is None:
         labels = molgrid.MGrid1f(batch_size)
         
-    # Make output directories
-    embeddings_dir = savepath / 'encodings_{}'.format(test_types_stem)
-    embeddings_dir.mkdir(parents=True, exist_ok=True)
+    # Make output directory
+    savepath.mkdir(parents=True, exist_ok=True)
 
     print('Performing inference on {} examples'.format(size))
     labels_dict = defaultdict(dict)
@@ -107,8 +104,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
             labels_numpy, predictions = process_batch(
                 model, e_test, gmaker, input_tensor, labels_tensor=labels, 
                 train=False, autoencoder=autoencoder)
-            representations = [p.flatten() for p in predictions[1]]
-            predictions = predictions[0]
             for i in range(batch_size):
                 index = iteration*batch_size + i
                 rec_path = paths[index][0]
@@ -131,8 +126,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
         labels_numpy, predictions = process_batch(
             model, e_test, gmaker, input_tensor, labels_tensor=labels,
             train=False, autoencoder=autoencoder)
-        representations = [p.flatten() for p in predictions[1]]
-        predictions = predictions[0]
         for i in range(remainder):
             index = size - (size % batch_size) + i
             rec_path = paths[index][0]

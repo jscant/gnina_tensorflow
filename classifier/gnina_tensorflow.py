@@ -112,8 +112,6 @@ def main():
             if not Path(fname).exists():
                 raise RuntimeError('{} does not exist.'.format(fname))
 
-    config_args = {}
-
     data_root = Path(args.data_root).resolve()
     train_types = Path(args.train).resolve()
     test_types = Path(args.test).resolve() if args.test is not None else None

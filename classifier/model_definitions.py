@@ -57,8 +57,7 @@ def define_baseline_model(dims):
     output_layer = Dense(2, activation='softmax')(representation)
 
     # Compile and return model
-    model = keras.models.Model(inputs=input_layer, outputs=[output_layer,
-                                                            representation])
+    model = keras.models.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.SGD(
         lr=0.01, momentum=0.9), loss=["sparse_categorical_crossentropy",
                                       None])
@@ -112,8 +111,7 @@ def define_densefs_model(dims, bc=False):
     output_layer = Dense(2, activation='softmax')(representation)
 
     # Compile and return model
-    model = keras.Model(inputs=input_layer, outputs=[output_layer,
-                                                     representation])
+    model = keras.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.SGD(
         lr=0.01, momentum=0.9), loss=['sparse_categorical_crossentropy', None])
     
