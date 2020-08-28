@@ -292,52 +292,36 @@ class DenseAutoEncoder(AutoEncoderBase):
         """
 
         activations = super(DenseAutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, final_activation)
+        final_activation = activations.get(final_activation, final_activation)
+        activation = 'sigmoid'
 
         self.input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
 
         # Hidden layers
-        x = MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2),
-                         padding='SAME', data_format='channels_first')(
-                             self.input_image)
-        x = Conv3D(32, 3, activation='relu', padding='SAME', use_bias=False,
-                   data_format='channels_first')(x)
+        x = tf_dense_block(self.input_image, 8, "db_1", 'sigmoid')
+        x = tf_transition_block(x, 0.5, "tb_1", 'sigmoid')
 
-        x = tf_dense_block(x, 4, "db_1")
-        x = tf_transition_block(x, 0.5, "tb_1")
-
-        x = tf_dense_block(x, 4, "db_2")
-        x = tf_transition_block(x, 0.5, "tb_2")
-
-        # Final transition block has global pooling instead of local and no
-        # convolution [2]
-        x = tf_dense_block(x, 4, "db_3")
-        x = tf_transition_block(x, 0.5, "tb_3", final=False)
+        x = tf_dense_block(x, 8, "db_2", 'sigmoid')
+        x = tf_transition_block(x, 0.5, 'tb_2', 'sigmoid')
 
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
-
+        
         self.encoding = Dense(encoding_size, activation='sigmoid',
                               name='encoding')(x)
 
         decoding = Dense(reduce(mul, final_shape[1:]))(self.encoding)
         reshaped = Reshape(final_shape[1:])(decoding)
 
-        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1')
-        x = tf_dense_block(x, 4, 'idb_1')
+        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1', 'sigmoid')
+        x = tf_dense_block(x, 8, 'idb_1', 'sigmoid')
 
-        x = tf_inverse_transition_block(x, 0.5, 'itb_2')
-        x = tf_dense_block(x, 4, 'idb_2')
-
-        x = tf_inverse_transition_block(x, 0.5, 'itb_3')
-        x = tf_dense_block(x, 4, 'idb_3')
-
-        x = tf_inverse_transition_block(x, 0.5, 'itb_4')
-        x = tf_dense_block(x, 4, 'idb_4')
+        x = tf_inverse_transition_block(x, 0.5, 'itb_2', 'sigmoid')
+        x = tf_dense_block(x, 8, 'idb_2', 'sigmoid')
 
         self.reconstruction = Conv3D(dims[0], 3,
-                                     activation=activation,
+                                     activation=final_activation,
                                      data_format='channels_first',
                                      padding='SAME', name='reconstruction')(x)
 

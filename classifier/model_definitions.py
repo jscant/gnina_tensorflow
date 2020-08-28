@@ -123,7 +123,7 @@ def define_densefs_model(dims, bc=False):
     return model
 
 
-def dense_block(x, blocks, name):
+def dense_block(x, blocks, name, activation='relu'):
     """A dense block.
 
     Arguments:
@@ -135,11 +135,12 @@ def dense_block(x, blocks, name):
         Output tensor for the block.
     """
     for i in range(blocks):
-        x = conv_block(x, 16, name=name + '_block' + str(i + 1))
+        x = conv_block(
+            x, 16, name=name + '_block' + str(i + 1), activation=activation)
     return x
 
 
-def transition_block(x, reduction, name, final=False):
+def transition_block(x, reduction, name, activation='relu', final=False):
     """A transition block.
 
     Arguments:
@@ -161,13 +162,14 @@ def transition_block(x, reduction, name, final=False):
 
     x = Conv3D(int(backend.int_shape(x)[bn_axis] * reduction), 1,
                data_format='channels_first', use_bias=False,
-               name=name + '_conv', activation='relu')(x)
+               name=name + '_{}'.format(activation), activation=activation)(x)
     x = MaxPooling3D(2, strides=2, name=name + '_pool',
                      data_format='channels_first')(x)
     return x
 
 
-def inverse_transition_block(x, reduction, name, final=False):
+def inverse_transition_block(x, reduction, name, activation='relu',
+                             final=False):
     """A transition block.
 
     Arguments:
@@ -189,13 +191,13 @@ def inverse_transition_block(x, reduction, name, final=False):
 
     x = Conv3D(int(backend.int_shape(x)[bn_axis] * reduction), 1,
                data_format='channels_first', use_bias=False,
-               name=name + '_conv', activation='relu')(x)
+               name=name + '_{}'.format(activation), activation=activation)(x)
     x = UpSampling3D(2, name=name + '_upsample',
                      data_format='channels_first')(x)
     return x
 
 
-def conv_block(x, growth_rate, name):
+def conv_block(x, growth_rate, name, activation='relu'):
     """A building block for a dense block.
 
     Arguments:
@@ -214,14 +216,14 @@ def conv_block(x, growth_rate, name):
         name=name + '_1_bn')(x)
     x1 = Conv3D(
         growth_rate, 3, use_bias=False, padding='same',
-        activation='relu', name=name + '_1_conv',
+        activation=activation, name=name + '_1_{}'.format(activation),
         data_format='channels_first')(x1)
 
     x = Concatenate(axis=bn_axis, name=name + '_concat')([x, x1])
     return x
 
 
-def tf_dense_block(x, blocks, name):
+def tf_dense_block(x, blocks, name, activation='relu'):
     """A dense block.
     
     Arguments:
@@ -233,11 +235,12 @@ def tf_dense_block(x, blocks, name):
       Output tensor for the block.
     """
     for i in range(blocks):
-        x = tf_conv_block(x, 32, name=name + '_block' + str(i + 1))
+        x = tf_conv_block(
+            x, 32, name=name + '_block' + str(i + 1), activation=activation)
     return x
 
 
-def tf_transition_block(x, reduction, name, final=False):
+def tf_transition_block(x, reduction, name, activation='relu', final=False):
     """A transition block.
     
     Arguments:
@@ -254,7 +257,7 @@ def tf_transition_block(x, reduction, name, final=False):
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
     if final:  # No conv or maxpool, will global pool after final TB
       return x        
-    x = layers.Activation('relu', name=name + '_relu')(x)
+    x = layers.Activation(activation, name=name + '_{}'.format(activation))(x)
     x = layers.Conv3D(
         int(backend.int_shape(x)[bn_axis] * reduction),
         1,
@@ -265,7 +268,8 @@ def tf_transition_block(x, reduction, name, final=False):
                                 data_format='channels_first')(x)
     return x
 
-def tf_inverse_transition_block(x, reduction, name, final=False):
+def tf_inverse_transition_block(x, reduction, name, activation='relu',
+                                final=False):
     """A transition block.
     
     Arguments:
@@ -282,7 +286,7 @@ def tf_inverse_transition_block(x, reduction, name, final=False):
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
     if final:  # No conv or maxpool, will global pool after final TB
       return x        
-    x = layers.Activation('relu', name=name + '_relu')(x)
+    x = layers.Activation(activation, name=name + '_{}'.format(activation))(x)
     x = layers.Conv3D(
         int(backend.int_shape(x)[bn_axis] * reduction),
         1,
@@ -293,7 +297,7 @@ def tf_inverse_transition_block(x, reduction, name, final=False):
     return x
 
 
-def tf_conv_block(x, growth_rate, name):
+def tf_conv_block(x, growth_rate, name, activation='relu'):
     """A building block for a dense block.
     
     Arguments:
@@ -309,14 +313,16 @@ def tf_conv_block(x, growth_rate, name):
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(
             x)
-    x1 = layers.Activation('relu', name=name + '_0_relu')(x1)
+    x1 = layers.Activation(
+        activation, name=name + '_0_{}'.format(activation))(x1)
     x1 = layers.Conv3D(
         4 * growth_rate, 1, use_bias=False, name=name + '_1_conv',
         data_format='channels_first')(x1)
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
             x1)
-    x1 = layers.Activation('relu', name=name + '_1_relu')(x1)
+    x1 = layers.Activation(
+        activation, name=name + '_1_{}'.format(activation))(x1)
     x1 = layers.Conv3D(
         growth_rate, 3, padding='same', use_bias=False, name=name + '_2_conv',
         data_format='channels_first')(x1)
