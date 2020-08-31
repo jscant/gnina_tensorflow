@@ -1,0 +1,8 @@
+numpy~=1.18.5
+setuptools~=46.4.0
+joblib~=0.16.0
+scikit-learn~=0.23.1
+matplotlib~=3.2.2
+molgrid~=0.0.1
+tf-nightly
+pytest~=6.0.1
