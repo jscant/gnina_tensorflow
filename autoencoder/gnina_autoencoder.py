@@ -46,11 +46,13 @@ def main():
             slurm_log_file = Path.home() / 'slurm_{}.out'.format(slurm_job_id)
             arg_str += '\nslurm_job_id {0}\nslurm_log_file {1}\n'.format(
                 slurm_job_id, slurm_log_file)
-            save_path = Path(args.save_path, slurm_job_id).resolve()
+            save_path = Path(args.save_path,
+                             slurm_job_id).expanduser().resolve()
         else:
-            save_path = Path(args.save_path, str(int(time.time()))).resolve()
+            save_path = Path(args.save_path,
+                             str(int(time.time()))).expanduser().resolve()
     else:
-        save_path = Path(args.save_path, args.name).resolve()
+        save_path = Path(args.save_path, args.name).expanduser().resolve()
 
     if args.momentum > 0 and args.optimiser.lower() not in ['sgd', 'rmsprop']:
         raise RuntimeError(
@@ -71,14 +73,16 @@ def main():
     # Setup libmolgrid to feed Examples into tensorflow objects
     if args.ligmap is None or args.recmap is None:
         e = molgrid.ExampleProvider(
-            data_root=str(args.data_root), balanced=False, shuffle=True)
+            data_root=str(Path(args.data_root).expanduser()), balanced=False,
+            shuffle=True)
     else:
         rec_typer = molgrid.FileMappedGninaTyper(args.recmap)
         lig_typer = molgrid.FileMappedGninaTyper(args.ligmap)
         e = molgrid.ExampleProvider(
-            rec_typer, lig_typer, data_root=str(args.data_root),
-            balanced=False, shuffle=True)
-    e.populate(str(args.train))
+            rec_typer, lig_typer,
+            data_root=str(Path(args.data_root).expanduser()), balanced=False,
+            shuffle=True)
+    e.populate(str(Path(args.train).expanduser()))
 
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,

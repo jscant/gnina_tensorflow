@@ -12,7 +12,7 @@ import argparse
 import tensorflow as tf
 import numpy as np
 
-from classifier.model_definitions import tf_transition_block,\
+from classifier.model_definitions import tf_transition_block, \
     tf_inverse_transition_block, tf_dense_block
 from functools import reduce
 from operator import mul
@@ -77,10 +77,10 @@ def composite_mse(target, reconstruction, ratio):
         where nonzero_mse and zero_mse are the MSE for the nonzero and zero
         parts of target respectively.
     """
-    frac = tf.divide(ratio, 1+ratio)
+    frac = tf.divide(ratio, 1 + ratio)
     return tf.math.add(
         tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
-        tf.math.multiply(1-frac, zero_mse(target, reconstruction)))
+        tf.math.multiply(1 - frac, zero_mse(target, reconstruction)))
 
 
 def mae(target, reconstruction):
@@ -151,7 +151,7 @@ def unbalanced_loss(target, reconstruction):
     """
     term_1 = tf.pow(target - reconstruction, 4)
     term_2 = tf.pow(target - reconstruction, 2)
-    loss = target*term_1 + tf.multiply(
+    loss = target * term_1 + tf.multiply(
         tf.constant(0.01), tf.multiply(1 - target, term_2))
     return tf.reduce_mean(loss)
 
@@ -166,7 +166,7 @@ def approx_heaviside(x):
         Tensor containing activations, where activations at or below zero
         are (approx.) zero, and activations above zero are (approx) one.
     """
-    return 0.5 + 0.5*tf.tanh(x*10.)
+    return 0.5 + 0.5 * tf.tanh(x * 10.)
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -225,7 +225,7 @@ class AutoEncoderBase(tf.keras.Model):
     def _define_activations(self):
         """Returns dict from strings to final layer activations objects."""
 
-        return { 'heaviside': approx_heaviside }
+        return {'heaviside': approx_heaviside}
 
 
 class AutoEncoder(AutoEncoderBase):
@@ -251,21 +251,21 @@ class AutoEncoder(AutoEncoderBase):
 
         activations = super(AutoEncoder, self)._define_activations()
         final_activation = activations.get(final_activation, final_activation)
-        
+
         self.input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
-        
+
         x = Flatten()(self.input_image)
         x = Dense(4000, activation='sigmoid')(x)
-        
+
         self.encoding = Dense(
             encoding_size, activation='sigmoid', name='encoding')(x)
-        
-        x = Dense(4000, activation='sigmoid')(self.encoding)        
+
+        x = Dense(4000, activation='sigmoid')(self.encoding)
         x = Dense(np.prod(dims), activation=final_activation)(x)
-        
+
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
-        
+
         super(AutoEncoder, self).__init__(
             optimiser, loss, opt_args
         )
@@ -307,7 +307,7 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
-        
+
         self.encoding = Dense(encoding_size, activation='sigmoid',
                               name='encoding')(x)
 
@@ -377,9 +377,11 @@ class LoadConfigTrain(argparse.Action):
 
         if values is None:
             return
-        config = Path(values).parents[1] / 'config'
+        values = Path(values).expanduser()
+        config = values.parents[1] / 'config'
         if not config.exists():
-            print("No config file found in experiment's base directory ({})".format(
+            print(
+                "No config file found in experiment's base directory ({})".format(
                     config))
             print('Only specified command line args will be used.')
             namespace.load_model = values
@@ -404,8 +406,8 @@ class LoadConfigTrain(argparse.Action):
         # args.load_model is always None if we do not do this, even when
         # it is specified using --load_model.
         namespace.load_model = values
-        
-        
+
+
 class LoadConfigTest(argparse.Action):
     """Class for loading argparse arguments from a config file."""
 
@@ -415,9 +417,11 @@ class LoadConfigTest(argparse.Action):
         if values is None:
             return
 
-        config = Path(values).parents[1] / 'config'
+        values = Path(values).expanduser()
+        config = values.parents[1] / 'config'
         if not config.exists():
-            print("No config file found in experiment's base directory ({})".format(
+            print(
+                "No config file found in experiment's base directory ({})".format(
                     config))
             print('Only specified command line args will be used.')
             namespace.load_model = values
@@ -489,9 +493,9 @@ def parse_command_line_args(test_or_train='train'):
     Command line args override args found in the config of model found in
     'pickup' directory.
     """
-    
+
     parser = argparse.ArgumentParser()
-    
+
     if test_or_train == 'train':
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTrain,
@@ -511,7 +515,7 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--model', '-m', type=str, required=False, default='single',
             help='Model architecture; one of single (SingleLayerAutoencoder' +
-            '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
+                 '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
         parser.add_argument(
             '--optimiser', '-o', type=str, required=False, default='sgd')
         parser.add_argument(
@@ -541,7 +545,7 @@ def parse_command_line_args(test_or_train='train'):
             command line will override the options loaded from the config file.
             """)
         parser.add_argument("--test", '-t', type=str, required=False)
-        
+
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
     parser.add_argument(
