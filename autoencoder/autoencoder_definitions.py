@@ -301,7 +301,8 @@ class LoadConfigTrain(argparse.Action):
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
-                if not len(chunks): continue
+                if not len(chunks):
+                    continue
                 if chunks[0] not in ['load_model',
                                      'absolute_save_path',
                                      'use_cpu',
@@ -381,9 +382,7 @@ def pickup(path):
             'nonzero_mse': nonzero_mse,
             'composite_mse': composite_mse,
             'nonzero_mae': nonzero_mae,
-            'zero_mae': zero_mae,
-            'approx_heaviside': approx_heaviside,
-            'unbalanced_loss': unbalanced_loss,
+            'zero_mae': zero_mae
         }
     )
 
@@ -411,12 +410,12 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTrain,
             nargs='?', help=
-            """Load saved keras model. If specified, this should be the 
-            directory containing the assets of a saved autoencoder. 
-            If specified, the options are loaded from the config file saved
-            when the original model was trained; any options specified in the 
-            command line will override the options loaded from the config file.
-            """)
+            ('Load saved keras model. If specified, this should be the '
+             'directory containing the assets of a saved autoencoder. '
+             'If specified, the options are loaded from the config file saved '
+             'when the original model was trained; any options specified in '
+             'the command line will override the options loaded from the '
+             'config file.'))
         parser.add_argument("--train", '-t', type=str, required=False)
         parser.add_argument('--encoding_size', '-e', type=int, required=False,
                             default=50)
@@ -449,12 +448,13 @@ def parse_command_line_args(test_or_train='train'):
     else:
         parser.add_argument(
             '--load_model', type=str, action=LoadConfigTest, help=
-            """Load saved keras model. If specified, this should be the 
-            directory containing the assets of a saved autoencoder. 
-            If specified, the options are loaded from the config file saved
-            when the original model was trained; any options specified in the 
-            command line will override the options loaded from the config file.
-            """)
+            'Load saved keras model. If specified, this should be the '
+            'directory containing the assets of a saved autoencoder. '
+            'If specified, the options are loaded from the config file saved '
+            'when the original model was trained; any options specified in '
+            'the command line will override the options loaded from the '
+            'config file.\n '
+            '')
         parser.add_argument("--test", '-t', type=str, required=False)
 
     parser.add_argument("--data_root", '-r', type=str, required=False,
