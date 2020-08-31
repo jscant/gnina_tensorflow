@@ -135,6 +135,7 @@ def nonzero_mae(target, reconstruction):
     abs_diff = tf.abs(masked_diff)
     return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
 
+
 class AutoEncoderBase(tf.keras.Model):
     """Virtual parent class for autoencoders."""
 
@@ -187,46 +188,6 @@ class AutoEncoderBase(tf.keras.Model):
         # tf.keras.utils.plot_model)
         self._layers = [layer for layer in self._layers if isinstance(
             layer, tf.keras.layers.Layer)]
-
-
-class AutoEncoder(AutoEncoderBase):
-
-    def __init__(self,
-                 dims,
-                 encoding_size=10,
-                 optimiser='sgd',
-                 loss='mse',
-                 final_activation='sigmoid',
-                 **opt_args):
-        """Setup for autoencoder architecture.
-
-        Arguments:
-            dims: dimentionality of inputs
-            encoding_size: size of bottleneck
-            optimiser: keras optimiser (string)
-            loss: loss function (string or keras loss object)
-            final_activation: activation function for final layer
-            opt_args: arguments for the keras optimiser (see keras
-                documentation)
-        """
-
-        self.input_image = Input(
-            shape=dims, dtype=tf.float32, name='input_image')
-
-        x = Flatten()(self.input_image)
-        x = Dense(4000, activation='sigmoid')(x)
-
-        self.encoding = Dense(
-            encoding_size, activation='sigmoid', name='encoding')(x)
-
-        x = Dense(4000, activation='sigmoid')(self.encoding)
-        x = Dense(np.prod(dims), activation=final_activation)(x)
-
-        self.reconstruction = Reshape(dims, name='reconstruction')(x)
-
-        super(AutoEncoder, self).__init__(
-            optimiser, loss, opt_args
-        )
 
 
 class DenseAutoEncoder(AutoEncoderBase):
@@ -467,7 +428,7 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--model', '-m', type=str, required=False, default='single',
             help='Model architecture; one of single (SingleLayerAutoencoder' +
-                 '), dense (DenseAutoEncodcer) or auto (AutoEncoder)')
+                 ') or dense (DenseAutoEncodcer)')
         parser.add_argument(
             '--optimiser', '-o', type=str, required=False, default='sgd')
         parser.add_argument(

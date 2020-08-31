@@ -33,8 +33,7 @@ def main():
 
     # For use later when defining model
     architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
-                     'dense': autoencoder_definitions.DenseAutoEncoder,
-                     'auto': autoencoder_definitions.AutoEncoder}
+                     'dense': autoencoder_definitions.DenseAutoEncoder}
 
     molgrid.set_gpu_enabled(1 - args.use_cpu)
     arg_str = '\n'.join(
