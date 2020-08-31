@@ -135,40 +135,6 @@ def nonzero_mae(target, reconstruction):
     abs_diff = tf.abs(masked_diff)
     return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
 
-
-def unbalanced_loss(target, reconstruction):
-    """Loss function which more heavily penalises loss on nonzero terms.
-
-    Only use for positive labels.
-
-    Arguments:
-        y_true: tensor containing true labels for model inputs
-        y_pred: tensor containing output(s) of model
-
-    Returns:
-        Error weighted strongly in favour of penalising errors on parts
-        of y_true which are above zero.
-    """
-    term_1 = tf.pow(target - reconstruction, 4)
-    term_2 = tf.pow(target - reconstruction, 2)
-    loss = target * term_1 + tf.multiply(
-        tf.constant(0.01), tf.multiply(1 - target, term_2))
-    return tf.reduce_mean(loss)
-
-
-def approx_heaviside(x):
-    """Activation function: continuous approximation to Heaviside fn.
-
-    Arguments:
-        x: Tensor with pre-activation values.
-
-    Returns:
-        Tensor containing activations, where activations at or below zero
-        are (approx.) zero, and activations above zero are (approx) one.
-    """
-    return 0.5 + 0.5 * tf.tanh(x * 10.)
-
-
 class AutoEncoderBase(tf.keras.Model):
     """Virtual parent class for autoencoders."""
 
@@ -222,11 +188,6 @@ class AutoEncoderBase(tf.keras.Model):
         self._layers = [layer for layer in self._layers if isinstance(
             layer, tf.keras.layers.Layer)]
 
-    def _define_activations(self):
-        """Returns dict from strings to final layer activations objects."""
-
-        return {'heaviside': approx_heaviside}
-
 
 class AutoEncoder(AutoEncoderBase):
 
@@ -248,9 +209,6 @@ class AutoEncoder(AutoEncoderBase):
             opt_args: arguments for the keras optimiser (see keras
                 documentation)
         """
-
-        activations = super(AutoEncoder, self)._define_activations()
-        final_activation = activations.get(final_activation, final_activation)
 
         self.input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
@@ -290,35 +248,32 @@ class DenseAutoEncoder(AutoEncoderBase):
             opt_args: arguments for the keras optimiser (see keras
                 documentation)
         """
-
-        activations = super(DenseAutoEncoder, self)._define_activations()
-        final_activation = activations.get(final_activation, final_activation)
         activation = 'sigmoid'
 
         self.input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
 
         # Hidden layers
-        x = tf_dense_block(self.input_image, 8, "db_1", 'sigmoid')
-        x = tf_transition_block(x, 0.5, "tb_1", 'sigmoid')
+        x = tf_dense_block(self.input_image, 8, "db_1", activation)
+        x = tf_transition_block(x, 0.5, "tb_1", activation)
 
-        x = tf_dense_block(x, 8, "db_2", 'sigmoid')
-        x = tf_transition_block(x, 0.5, 'tb_2', 'sigmoid')
+        x = tf_dense_block(x, 8, "db_2", activation)
+        x = tf_transition_block(x, 0.5, 'tb_2', activation)
 
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
 
-        self.encoding = Dense(encoding_size, activation='sigmoid',
+        self.encoding = Dense(encoding_size, activation=activation,
                               name='encoding')(x)
 
         decoding = Dense(reduce(mul, final_shape[1:]))(self.encoding)
         reshaped = Reshape(final_shape[1:])(decoding)
 
-        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1', 'sigmoid')
-        x = tf_dense_block(x, 8, 'idb_1', 'sigmoid')
+        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1', activation)
+        x = tf_dense_block(x, 8, 'idb_1', activation)
 
-        x = tf_inverse_transition_block(x, 0.5, 'itb_2', 'sigmoid')
-        x = tf_dense_block(x, 8, 'idb_2', 'sigmoid')
+        x = tf_inverse_transition_block(x, 0.5, 'itb_2', activation)
+        x = tf_dense_block(x, 8, 'idb_2', activation)
 
         self.reconstruction = Conv3D(dims[0], 3,
                                      activation=final_activation,
@@ -352,16 +307,13 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                 documentation)
         """
 
-        activations = super(SingleLayerAutoEncoder, self)._define_activations()
-        activation = activations.get(final_activation, final_activation)
-
         self.input_image = Input(shape=dims, dtype=tf.float32,
                                  name='input_image')
         x = Flatten()(self.input_image)
         self.encoding = Dense(
             encoding_size, name='encoding', activation='sigmoid')(x)
         x = Dense(np.prod(dims),
-                  activation=activation)(self.encoding)
+                  activation=final_activation)(self.encoding)
         self.reconstruction = Reshape(dims, name='reconstruction')(x)
 
         super(SingleLayerAutoEncoder, self).__init__(
