@@ -17,7 +17,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     Reshape
-
 from classifier.model_definitions import tf_transition_block, \
     tf_inverse_transition_block, tf_dense_block
 
@@ -175,8 +174,6 @@ class AutoEncoderBase(tf.keras.Model):
                 metrics=metrics
             )
         else:
-            if loss == 'unbalanced':
-                loss = unbalanced_loss
             self.compile(
                 optimizer=optimiser(**opt_args),
                 loss={'reconstruction': loss,
