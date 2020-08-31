@@ -9,16 +9,17 @@ dimensional space, as well as the inverse.
 """
 
 import argparse
-import tensorflow as tf
-import numpy as np
-
-from classifier.model_definitions import tf_transition_block, \
-    tf_inverse_transition_block, tf_dense_block
 from functools import reduce
 from operator import mul
 from pathlib import Path
+
+import numpy as np
+import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
-    MaxPooling3D, Reshape, Conv3DTranspose, UpSampling3D, BatchNormalization
+    Reshape
+
+from classifier.model_definitions import tf_transition_block, \
+    tf_inverse_transition_block, tf_dense_block
 
 
 def nonzero_mse(target, reconstruction):
