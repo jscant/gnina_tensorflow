@@ -20,11 +20,11 @@ from autoencoder.calculate_encodings import calculate_encodings
 from tensorflow.python.util import deprecation
 from utilities.gnina_functions import Timer, format_time, print_with_overwrite
 
+
 def main():
-    
     # Parse and sanitise command line args
     ae, args = autoencoder_definitions.parse_command_line_args('train')
-    
+
     # There really are a lot of these and they are not useful to scientists
     # using this software. Only log errors (unless verbose)
     if not args.verbose:
@@ -36,7 +36,7 @@ def main():
                      'dense': autoencoder_definitions.DenseAutoEncoder,
                      'auto': autoencoder_definitions.AutoEncoder}
 
-    molgrid.set_gpu_enabled(1-args.use_cpu)
+    molgrid.set_gpu_enabled(1 - args.use_cpu)
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
 
@@ -79,7 +79,7 @@ def main():
             rec_typer, lig_typer, data_root=str(args.data_root),
             balanced=False, shuffle=True)
     e.populate(str(args.train))
-    
+
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,
         dimension=args.dimension,
@@ -105,7 +105,7 @@ def main():
 
     ae.summary()
 
-    if not args.loss in ['composite_mse', 'unbalanced_loss']:
+    if args.loss not in ['composite_mse', 'unbalanced_loss']:
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
@@ -119,7 +119,6 @@ def main():
     for iteration in range(args.iterations):
         if not (iteration + 1) % args.save_interval \
                 and iteration < args.iterations - 1:
-
             checkpoint_path = Path(
                 save_path,
                 'checkpoints',
@@ -131,7 +130,7 @@ def main():
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
         input_tensor_numpy = np.minimum(input_tensor.tonumpy(), 1.0)
-        
+
         mean_nonzero = np.mean(
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
@@ -165,17 +164,17 @@ def main():
         time_per_iter = time_elapsed / (iteration + 1)
         time_remaining = time_per_iter * (args.iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
-        
+
         if not iteration:
             print('\n')
-        
+
         console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | ' +
                           'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}' +
                           '\nTime elapsed {6} | Time remaining: {7}').format(
             iteration, args.iterations, args.loss, loss['loss'], nonzero_mae,
             zero_mae, format_time(time_elapsed), formatted_eta)
         print_with_overwrite(console_output)
-        
+
         loss_log += loss_str + '\n'
         if not iteration % 10:
             with open(save_path / 'loss_log.txt', 'w') as f:
@@ -201,9 +200,10 @@ def main():
     lines = []
     for idx, losses in enumerate([zero_losses, nonzero_losses]):
         gap = 100
-        losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
+        losses = [np.mean(losses[n:n + gap]) for n in
+                  range(0, len(losses), gap)]
         line, = axes[idx].plot(
-            np.arange(len(losses))*gap, losses, cols[idx], label=labels[idx])
+            np.arange(len(losses)) * gap, losses, cols[idx], label=labels[idx])
         axes[idx].set_ylabel('Loss')
         lines.append(line)
     ax1.legend(lines, [line.get_label() for line in lines])
@@ -215,13 +215,14 @@ def main():
     axes = [ax1]
     for idx, losses in enumerate([losses]):
         gap = 100
-        losses = [np.mean(losses[n:n+gap]) for n in range(0, len(losses), gap)]
-        axes[idx].plot(np.arange(len(losses))*gap, losses)
+        losses = [np.mean(losses[n:n + gap]) for n in
+                  range(0, len(losses), gap)]
+        axes[idx].plot(np.arange(len(losses)) * gap, losses)
         axes[idx].set_ylabel('Loss')
     ax1.legend([args.loss])
     fig.savefig(save_path / 'composite_loss.png')
 
-    if args.save_encodings: # Save encodings in serialised format
+    if args.save_encodings:  # Save encodings in serialised format
         print('Saving encodings...')
         with Timer() as t:
             calculate_encodings(encoder=ae,
@@ -234,7 +235,7 @@ def main():
                                 verbose=False)
         print('Encodings calculated and saved to {0} in {1} s'.format(
             save_path / 'encodings', t.interval))
-            
+
 
 if __name__ == '__main__':
     main()
