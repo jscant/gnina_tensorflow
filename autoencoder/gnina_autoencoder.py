@@ -6,24 +6,25 @@ Created on Tue Jun 23 14:45:32 2020
 gnina inputs.
 """
 
+import os
+import time
 from math import isnan
+from pathlib import Path
+
 import molgrid
 import numpy as np
-import os
 import tensorflow as tf
-import time
-
-from autoencoder import autoencoder_definitions
 from matplotlib import pyplot as plt
-from pathlib import Path
-from autoencoder.calculate_encodings import calculate_encodings
 from tensorflow.python.util import deprecation
+
+from autoencoder import autoencoder_definitions, parse_command_line_args
+from autoencoder.calculate_encodings import calculate_encodings
 from utilities.gnina_functions import Timer, format_time, print_with_overwrite
 
 
 def main():
     # Parse and sanitise command line args
-    ae, args = autoencoder_definitions.parse_command_line_args('train')
+    ae, args = parse_command_line_args.parse_command_line_args('train')
 
     # There really are a lot of these and they are not useful to scientists
     # using this software. Only log errors (unless verbose)
@@ -71,6 +72,7 @@ def main():
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     if args.ligmap is None or args.recmap is None:
+        # noinspection PyArgumentList
         e = molgrid.ExampleProvider(
             data_root=str(Path(args.data_root).expanduser()), balanced=False,
             shuffle=True)
@@ -83,11 +85,13 @@ def main():
             shuffle=True)
     e.populate(str(Path(args.train).expanduser()))
 
+    # noinspection PyArgumentList
     gmaker = molgrid.GridMaker(
         binary=args.binary_mask,
         dimension=args.dimension,
         resolution=args.resolution)
 
+    # noinspection PyArgumentList
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (args.batch_size,) + dims
     input_tensor = molgrid.MGrid5f(*tensor_shape)
