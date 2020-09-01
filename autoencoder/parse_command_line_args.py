@@ -147,7 +147,7 @@ def parse_command_line_args(test_or_train='train'):
                             default=50)
         parser.add_argument('--iterations', '-i', type=int, required=False)
         parser.add_argument(
-            '--save_interval', type=int, required=False, default=10000)
+            '--save_interval', type=int, required=False, default=-1)
         parser.add_argument(
             '--model', '-m', type=str, required=False, default='single',
             help='Model architecture; one of single (SingleLayerAutoencoder' +

@@ -8,7 +8,6 @@ gnina inputs.
 
 import os
 import time
-from math import isnan
 from pathlib import Path
 
 import molgrid
@@ -19,7 +18,8 @@ from tensorflow.python.util import deprecation
 
 from autoencoder import autoencoder_definitions, parse_command_line_args
 from autoencoder.calculate_encodings import calculate_encodings
-from utilities.gnina_functions import Timer, format_time, print_with_overwrite
+from autoencoder.train import train
+from utilities.gnina_functions import Timer
 
 
 def main():
@@ -116,80 +116,13 @@ def main():
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
-    loss_ratio = 0.5
-    loss_log = 'iteration {} nonzero_mae zero_mae nonzero_mean\n'.format(
-        args.loss)
-    print('Starting training cycle...')
-    print('Working directory: {}'.format(save_path))
-
-    start_time = time.time()
-    for iteration in range(args.iterations):
-        if not (iteration + 1) % args.save_interval \
-                and iteration < args.iterations - 1:
-            checkpoint_path = Path(
-                save_path,
-                'checkpoints',
-                'ckpt_model_{}'.format(iteration + 1)
-            )
-            ae.save(checkpoint_path)
-
-        batch = e.next_batch(args.batch_size)
-        gmaker.forward(batch, input_tensor, 0, random_rotation=False)
-
-        input_tensor_numpy = np.minimum(input_tensor.tonumpy(), 1.0)
-
-        mean_nonzero = np.mean(
-            input_tensor_numpy[np.where(input_tensor_numpy > 0)])
-
-        x_inputs = {'input_image': input_tensor_numpy}
-        if args.loss == 'composite_mse':
-            x_inputs['frac'] = tf.constant(
-                loss_ratio, shape=(args.batch_size,))
-
-        loss = ae.train_on_batch(
-            x_inputs,
-            {'reconstruction': input_tensor_numpy},
-            return_dict=True)
-
-        zero_mae = loss['reconstruction_zero_mae']
-        nonzero_mae = loss['reconstruction_nonzero_mae']
-        if isnan(nonzero_mae):
-            nonzero_mae = nonzero_losses[-1] if len(nonzero_losses) else 1.
-
-        if zero_mae > 1e-5:
-            loss_ratio = min(50, nonzero_mae / zero_mae)
-        else:
-            loss_ratio = 50
-
-        if isnan(loss_ratio):
-            loss_ratio = 0.5
-
-        loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
-            iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero)
-
-        time_elapsed = time.time() - start_time
-        time_per_iter = time_elapsed / (iteration + 1)
-        time_remaining = time_per_iter * (args.iterations - iteration - 1)
-        formatted_eta = format_time(time_remaining)
-
-        if not iteration:
-            print('\n')
-
-        console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | ' +
-                          'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}' +
-                          '\nTime elapsed {6} | Time remaining: {7}').format(
-            iteration, args.iterations, args.loss, loss['loss'], nonzero_mae,
-            zero_mae, format_time(time_elapsed), formatted_eta)
-        print_with_overwrite(console_output)
-
-        loss_log += loss_str + '\n'
-        if not iteration % 10:
-            with open(save_path / 'loss_log.txt', 'w') as f:
-                f.write(loss_log[:-1])
-
-        zero_losses.append(zero_mae)
-        nonzero_losses.append(nonzero_mae)
-        losses.append(loss['loss'])
+    train_args = vars(args)
+    train(ae, data_root=args.data_root, train_types=args.train,
+          iterations=args.iterations, batch_size=args.batch_size,
+          save_path=save_path, dimension=args.dimension,
+          resolution=args.resolution, loss_fn=args.loss, ligmap=args.ligmap,
+          recmap=args.recmap, save_interval=args.save_interval,
+          binary_mask=args.binary_mask)
     print('\nFinished training.')
 
     # Save final trained autoencoder
