@@ -19,9 +19,9 @@ DenseNet components modified original tensorflow implementation. [3]
 
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.python.keras import backend, layers
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, BatchNormalization, Concatenate, GlobalMaxPooling3D
+from tensorflow.python.keras import backend, layers
 from tensorflow.python.keras.layers import UpSampling3D
 
 
@@ -30,7 +30,7 @@ def define_baseline_model(dims):
 
     Arguments:
         dims: tuple with input dimensions.
-        
+
     Returns:
         Compiled keras model with DenseFS architecture
     """
@@ -75,7 +75,7 @@ def define_densefs_model(dims, bc=False):
     Arguments:
         dims: tuple with input dimensions.
         bc: use DenseNet-BC (updated DenseNet architecture)
-        
+
     Returns:
         Compiled keras model with original gnina architecture
     """
@@ -132,7 +132,7 @@ def dense_block(x, blocks, name, activation='relu'):
         blocks: integer, the number of building blocks.
         name: string, block label.
         activation: keras activation to be applied for each conv block
-        
+
     Returns:
         Output tensor for the block.
     """
@@ -151,11 +151,11 @@ def transition_block(x, reduction, name, activation='relu', final=False):
         name: string, block label.
         activation: activation function for convolution.
         final: if True, only apply batch normalisation.
-        
+
     Returns:
         output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_first' else 1
+    bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
         moving_mean_initializer=tf.constant_initializer(0.999),
@@ -184,7 +184,7 @@ def inverse_transition_block(x, reduction, name, activation='relu'):
     Returns:
         output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_first' else 1
+    bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
         moving_mean_initializer=tf.constant_initializer(0.999),
@@ -206,12 +206,11 @@ def conv_block(x, growth_rate, name, activation='relu'):
         growth_rate: float, growth rate at dense layers.
         name: string, block label.
         activation: activation function for convolution.
-        
+
     Returns:
         Output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_first' else 1
-
+    bn_axis = 1
     x1 = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
         moving_mean_initializer=tf.constant_initializer(0.999),
@@ -227,13 +226,13 @@ def conv_block(x, growth_rate, name, activation='relu'):
 
 def tf_dense_block(x, blocks, name, activation='relu'):
     """A dense block.
-    
+
     Arguments:
       x: input tensor.
       blocks: integer, the number of building blocks.
       name: string, block label.
       activation: activation function for convolution.
-      
+
     Returns:
       Output tensor for the block.
     """
@@ -245,18 +244,18 @@ def tf_dense_block(x, blocks, name, activation='relu'):
 
 def tf_transition_block(x, reduction, name, activation='relu', final=False):
     """A transition block.
-    
+
     Arguments:
       x: input tensor.
       reduction: float, compression rate at transition layers.
       name: string, block label.
       activation: activation function for convolution.
       final: if True, only apply batch normalisation.
-      
+
     Returns:
       output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_last' else 1
+    bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
     if final:  # No conv or maxpool, will global pool after final TB
@@ -275,17 +274,17 @@ def tf_transition_block(x, reduction, name, activation='relu', final=False):
 
 def tf_inverse_transition_block(x, reduction, name, activation='relu'):
     """A transition block.
-    
+
     Arguments:
       x: input tensor.
       reduction: float, compression rate at transition layers.
       name: string, block label.
       activation: activation function for convolution.
-      
+
     Returns:
       output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_last' else 1
+    bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
     x = layers.Activation(activation, name=name + '_{}'.format(activation))(x)
@@ -302,17 +301,17 @@ def tf_inverse_transition_block(x, reduction, name, activation='relu'):
 
 def tf_conv_block(x, growth_rate, name, activation='relu'):
     """A building block for a dense block.
-    
+
     Arguments:
       x: input tensor.
       growth_rate: float, growth rate at dense layers.
       name: string, block label.
       activation: activation function for convolution.
-      
+
     Returns:
       Output tensor for the block.
     """
-    bn_axis = 4 if backend.image_data_format() == 'channels_last' else 1
+    bn_axis = 1
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(
         x)
