@@ -32,10 +32,20 @@ def train(model, data_root, train_types, iterations, batch_size, save_path,
         dimension: length of cube in which ligand is situated in Angstroms
         resolution: resolution of input cube in Angstroms
         loss_fn: (string) name of keras loss fn or 'composite_mse'
-        ligmap:
-        recmap:
-        save_interval:
-        binary_mask:
+        ligmap: location of text file containing ligand smina types grouped by
+            line to be used in input grid construction
+        recmap: location of text file containing receptor smina types grouped by
+            line to be used in input grid construction
+        save_interval: interval (in batches) on which model weights are saved as
+            a checkpoint
+        binary_mask: instead of real numbers, input grid is binary where a 1
+            indicates that the real input would have had a value greater than
+            zero
+
+    Returns:
+        Three lists containing the loss history, mean average error for inputs
+        equal to zero and mean average error for inputs greater than zero,
+        respectively.
     """
     # Setup libmolgrid to feed Examples into tensorflow objects
     save_interval = save_interval if save_interval > 0 else iterations + 10
