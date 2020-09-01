@@ -15,8 +15,8 @@ import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     Reshape
 
-from classifier.model_definitions import tf_transition_block, \
-    tf_inverse_transition_block, tf_dense_block
+from layers.layers import tf_transition_block, tf_inverse_transition_block, \
+    tf_dense_block
 
 
 def nonzero_mse(target, reconstruction):

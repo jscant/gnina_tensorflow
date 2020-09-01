@@ -7,16 +7,15 @@ Created on Thu Aug 13 16:56:42 2020
 @brief: Unit tests for calculate_encodings.py
 """
 
-import tensorflow as tf
-import torch
-import molgrid
-import numpy as np
-import pytest
-
-from autoencoder.calculate_encodings import calculate_encodings
-from autoencoder import autoencoder_definitions
 from collections import defaultdict
 from pathlib import Path
+
+import molgrid
+import numpy as np
+import tensorflow as tf
+
+from autoencoder import autoencoder_definitions
+from autoencoder.calculate_encodings import calculate_encodings
 from utilities import gnina_embeddings_pb2 as ge
 
 
@@ -44,16 +43,15 @@ def test_calculate_encodings():
             'composite_mse': autoencoder_definitions.composite_mse,
             'nonzero_mae': autoencoder_definitions.nonzero_mae,
             'zero_mae': autoencoder_definitions.zero_mae,
-            'approx_heaviside': autoencoder_definitions.approx_heaviside,
         }
     )
-    
+
     ligmap = 'test/resources/gnina35.ligmap'
     recmap = 'test/resources/gnina35.recmap'
     batch_size = 16
     temporary_directory = Path('test/tmp_save_path')
     test_types = 'data/small_chembl_test.types'
-    
+
     tf.keras.backend.clear_session()
 
     # Setup libmolgrid to feed Examples into tensorflow objects
@@ -74,7 +72,7 @@ def test_calculate_encodings():
         test_types, save_path=temporary_directory,
         rotate=False, verbose=False, ligmap=ligmap,
         recmap=recmap)
-    
+
     labels = defaultdict(lambda: defaultdict(lambda: None))
     with open(test_types, 'r') as f:
         for line in f.readlines():
@@ -91,7 +89,7 @@ def test_calculate_encodings():
         for ligand_struct in encodings.ligand:
             label = ligand_struct.label
             ligand_path = ligand_struct.path
-            assert np.array(ligand_struct.embedding).shape == (5, )
+            assert np.array(ligand_struct.embedding).shape == (5,)
             assert labels[rec_path][ligand_path] == label
-            
+
     wipe_directory(temporary_directory)
