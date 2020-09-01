@@ -11,11 +11,12 @@ import time
 from pathlib import Path
 
 import molgrid
+import tempfile
 import tensorflow as tf
 
 from autoencoder.parse_command_line_args import parse_command_line_args
 from utilities import gnina_embeddings_pb2, gnina_functions
-
+from utilities.reorder_types_file import reorder
 
 def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                         dimension, resolution, rotate=False, ligmap=None,
@@ -50,6 +51,10 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     def get_paths(fname):
         """Reads types file to give path, label and indexing information.
 
+        Arguments:
+            fname: types file with lines of the format:
+                <label> <receptor_path> <ligand_path>
+
         Returns a dictionary mapping of { global_idx: (label, rec, lig) } where
         global_idx is the position of the receptor/ligand pair in the types
         file, label is in {0, 1}, and rec and lig are the relative paths to
@@ -66,13 +71,22 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                 lig_path = chunks[2]
                 if idx == 0:
                     curr_rec = rec_path
-                elif rec_path != curr_rec and rec_path in recs:
-                    # TODO: on-the-fly types file grouping by receptor in the
-                    # case that types file is not grouped by receptor
-                    raise RuntimeError(
-                        'Types file must be grouped by receptor')
+                    recs.add(rec_path)
+                elif rec_path != curr_rec:
+                    if rec_path in recs:
+                        # We have a types file unordered by receptor; create a
+                        # temp ordered file, extract what we need, then delete.
+                        reordered_types_file = reorder(fname)
+                        tmp_types_file = save_path / 'tmp_types_file.types'
+                        with open(tmp_types_file, 'w') as tmp:
+                            tmp.write(reordered_types_file)
+                        _, _, result_paths = get_paths(tmp_types_file)
+                        return True, tmp_types_file, result_paths
+                    else:
+                        recs.add(rec_path)
+                        curr_rec = rec_path
                 result_paths[idx] = (lab, rec_path, lig_path)
-        return result_paths
+        return False, fname, result_paths
 
     def write_encodings_to_disk(receptor, enc):
         """Write encodings to disk in serialised binary format.
@@ -94,7 +108,9 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
         with open(Path(save_path) / 'encodings' / fname, 'wb') as f:
             f.write(rec_msg.SerializeToString())
 
+    types_file = Path(types_file).expanduser()
     save_path = Path(save_path).expanduser()
+    delete_types_file, types_file, paths = get_paths(types_file)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     if ligmap is None or recmap is None:
@@ -111,6 +127,9 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
             balanced=False, shuffle=False)
     e_test.populate(str(Path(types_file).expanduser()))
 
+    if delete_types_file:
+        types_file.unlink()
+
     # noinspection PyArgumentList
     gmaker = molgrid.GridMaker(
         binary=binary_mask,
@@ -124,7 +143,6 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
 
     # Need a dictionary mapping {global_idx: (label, rec, lig) where global_idx
     # is the position of the receptor/ligand pair in the types file
-    paths = get_paths(types_file)
     total_size = len(paths)
     iterations = total_size // batch_size
 

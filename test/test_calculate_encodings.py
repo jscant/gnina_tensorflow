@@ -10,7 +10,6 @@ Created on Thu Aug 13 16:56:42 2020
 from collections import defaultdict
 from pathlib import Path
 
-import molgrid
 import numpy as np
 import tensorflow as tf
 
@@ -54,24 +53,11 @@ def test_calculate_encodings():
 
     tf.keras.backend.clear_session()
 
-    # Setup libmolgrid to feed Examples into tensorflow objects
-    rec_typer = molgrid.FileMappedGninaTyper(recmap)
-    lig_typer = molgrid.FileMappedGninaTyper(ligmap)
-    e = molgrid.ExampleProvider(
-        rec_typer, lig_typer, data_root='data', balanced=False, shuffle=False)
-    e.populate(test_types)
-
-    gmaker = molgrid.GridMaker(dimension=18.0, resolution=1.0)
-
-    dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (batch_size,) + dims
-    input_tensor = molgrid.MGrid5f(*tensor_shape)
-
     calculate_encodings(
-        autoencoder, gmaker, input_tensor, 'data',
-        test_types, save_path=temporary_directory,
-        rotate=False, verbose=False, ligmap=ligmap,
-        recmap=recmap)
+        autoencoder, data_root='data', batch_size=batch_size,
+        types_file=test_types, save_path=temporary_directory, dimension=18.,
+        resolution=1., rotate=False, ligmap=ligmap, recmap=recmap,
+        binary_mask=False)
 
     labels = defaultdict(lambda: defaultdict(lambda: None))
     with open(test_types, 'r') as f:
