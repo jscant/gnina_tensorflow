@@ -164,6 +164,7 @@ def main():
 
     if args.save_encodings:  # Save encodings in serialised format
         print('Saving encodings...')
+        del gmaker, input_tensor
         with Timer() as t:
             calculate_encodings(encoder=ae,
                                 gmaker=gmaker,

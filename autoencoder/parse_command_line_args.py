@@ -54,7 +54,6 @@ class LoadConfigTest(argparse.Action):
 
         if values is None:
             return
-
         values = Path(values).expanduser()
         config = values.parents[1] / 'config'
         if not config.exists():
@@ -75,6 +74,10 @@ class LoadConfigTest(argparse.Action):
                     args += '--{0} {1}\n'.format(*chunks)
                 elif chunks[0] in ['dimension', 'resolution']:
                     setattr(namespace, chunks[0], float(chunks[1]))
+                elif chunks[0] in ['ligmap', 'recmap']:
+                    setattr(namespace, *chunks)
+                elif chunks[0] in ['batch_size']:
+                    setattr(namespace, chunks[0], int(chunks[1]))
                 else:  # store_true args present a problem, loaded manually
                     if chunks[0] == 'binary_mask':
                         if len(chunks) == 1 or chunks[1] == 'True':
@@ -171,9 +174,12 @@ def parse_command_line_args(test_or_train='train'):
             '--save_encodings', action='store_true')
         parser.add_argument('--recmap', type=str, required=False)
         parser.add_argument('--ligmap', type=str, required=False)
+        parser.add_argument(
+            '--verbose', action='store_true',
+            help='Do not suppress deprecation messages and other tf warnings')
     else:
         parser.add_argument(
-            '--load_model', type=str, action=LoadConfigTest,
+            'load_model', type=str, action=LoadConfigTest, nargs='?',
             help='Load saved keras model. If specified, this should be the '
                  'directory containing the assets of a saved autoencoder. '
                  'If specified, the options are loaded from the config file '
@@ -185,15 +191,10 @@ def parse_command_line_args(test_or_train='train'):
     parser.add_argument("--data_root", '-r', type=str, required=False,
                         default='')
     parser.add_argument(
-        '--batch_size', '-b', type=int, required=False, default=16)
-    parser.add_argument(
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
     parser.add_argument('--name', type=str, required=False)
-    parser.add_argument(
-        '--verbose', action='store_true',
-        help='Do not suppress deprecation messages and other tf warnings')
     args = parser.parse_args()
 
     autoencoder = None
