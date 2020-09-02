@@ -162,22 +162,24 @@ class AutoEncoderBase(tf.keras.Model):
             outputs=[self.reconstruction, self.encoding]
         )
 
-        metrics = {'reconstruction': [mae, nonzero_mae, zero_mae,
-                                      zero_mse, nonzero_mse]}
         if loss == 'composite_mse':
             self.add_loss(composite_mse(
                 self.input_image, self.reconstruction, self.frac))
             self.compile(
                 optimizer=optimiser(**opt_args),
-                metrics=metrics
             )
         else:
             self.compile(
                 optimizer=optimiser(**opt_args),
                 loss={'reconstruction': loss,
                       'encoding': None},
-                metrics=metrics
             )
+
+        # We have to do this because lr_range_test.py doesn't like to
+        # recompile with metrics and composite_ms
+        self.metrics_ = {
+            'reconstruction': [mae, nonzero_mae, zero_mae, zero_mse,
+                               nonzero_mse]}
 
         # Bug with add_loss puts empty dict at the end of model._layers which
         # interferes with some functionality (such as

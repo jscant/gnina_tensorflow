@@ -7,7 +7,6 @@ gnina inputs.
 """
 
 import os
-import time
 from pathlib import Path
 
 import molgrid
@@ -75,12 +74,20 @@ def main():
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
-    train(ae, data_root=args.data_root, train_types=args.train,
-          iterations=args.iterations, batch_size=args.batch_size,
-          save_path=save_path, dimension=args.dimension,
-          resolution=args.resolution, loss_fn=args.loss, ligmap=args.ligmap,
-          recmap=args.recmap, save_interval=args.save_interval,
-          binary_mask=args.binary_mask)
+    losses, nonzero_losses, zero_losses = train(
+        ae, data_root=args.data_root,
+        train_types=args.train,
+        iterations=args.iterations,
+        batch_size=args.batch_size,
+        save_path=save_path,
+        dimension=args.dimension,
+        resolution=args.resolution,
+        loss_fn=args.loss,
+        ligmap=args.ligmap,
+        recmap=args.recmap,
+        save_interval=args.save_interval,
+        binary_mask=args.binary_mask
+    )
     print('\nFinished training.')
 
     # Save final trained autoencoder
@@ -122,13 +129,14 @@ def main():
 
     if args.save_encodings:  # Save encodings in serialised format
         print('Saving encodings...')
-        del gmaker, input_tensor
         with Timer() as t:
             calculate_encodings(encoder=ae,
                                 data_root=args.data_root,
                                 batch_size=args.batch_size,
                                 types_file=args.train,
                                 save_path=save_path,
+                                dimension=args.dimension,
+                                resolution=args.resolution,
                                 ligmap=args.ligmap,
                                 recmap=args.recmap,
                                 rotate=False,

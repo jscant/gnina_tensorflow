@@ -16,10 +16,10 @@ import tensorflow as tf
 from utilities.gnina_functions import format_time, print_with_overwrite
 
 
-def train(model, data_root, train_types, iterations, batch_size, save_path,
-          dimension, resolution, loss_fn, ligmap=None, recmap=None,
-          save_interval=-1, binary_mask=False):
-    """Trains an autoencoder.
+def train(model, data_root, train_types, iterations, batch_size,
+          dimension, resolution, loss_fn, save_path=None, ligmap=None,
+          recmap=None, save_interval=-1, binary_mask=False, silent=False):
+    """Train an autoencoder.
     
     Arguments:
         model: compiled autoencoder for training
@@ -41,6 +41,8 @@ def train(model, data_root, train_types, iterations, batch_size, save_path,
         binary_mask: instead of real numbers, input grid is binary where a 1
             indicates that the real input would have had a value greater than
             zero
+        silent: when True, print statements are suppressed, no output is written
+            to disk (checkpoints, loss history)
 
     Returns:
         Three lists containing the loss history, mean average error for inputs
@@ -79,12 +81,13 @@ def train(model, data_root, train_types, iterations, batch_size, save_path,
 
     loss_ratio = 0.5
     loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean\n'
-    print('Starting training cycle...')
-    print('Working directory: {}'.format(save_path))
+    if not silent and save_path is not None:
+        save_path = Path(save_path)
+        print('Working directory: {}'.format(save_path))
 
     start_time = time.time()
     for iteration in range(iterations):
-        if not (iteration + 1) % save_interval \
+        if save_path is not None and not (iteration + 1) % save_interval \
                 and iteration < iterations - 1:
             checkpoint_path = Path(
                 save_path,
@@ -132,20 +135,23 @@ def train(model, data_root, train_types, iterations, batch_size, save_path,
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
-        if not iteration:
+        if not iteration and not silent:
             print('\n')
 
-        console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | ' +
-                          'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}' +
-                          '\nTime elapsed {6} | Time remaining: {7}').format(
-            iteration, iterations, loss_fn, loss['loss'], nonzero_mae,
-            zero_mae, format_time(time_elapsed), formatted_eta)
-        print_with_overwrite(console_output)
+        if not silent:
+            console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | '
+                              'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}'
+                              '\nTime elapsed {6} | Time remaining: {7}') \
+                .format(iteration, iterations, loss_fn, loss['loss'],
+                        nonzero_mae, zero_mae, format_time(time_elapsed),
+                        formatted_eta)
+            print_with_overwrite(console_output)
 
-        loss_log += loss_str + '\n'
-        if not iteration % 10:
-            with open(save_path / 'loss_log.txt', 'w') as f:
-                f.write(loss_log[:-1])
+        if save_path is not None:
+            loss_log += loss_str + '\n'
+            if not iteration % 10:
+                with open(save_path / 'loss_log.txt', 'w') as f:
+                    f.write(loss_log[:-1])
 
         zero_losses.append(zero_mae)
         nonzero_losses.append(nonzero_mae)
