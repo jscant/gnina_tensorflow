@@ -19,7 +19,7 @@ from tensorflow.python.util import deprecation
 from autoencoder import autoencoder_definitions, parse_command_line_args
 from autoencoder.calculate_encodings import calculate_encodings
 from autoencoder.train import train
-from utilities.gnina_functions import Timer
+from utilities.gnina_functions import Timer, get_dims
 
 
 def main():
@@ -70,42 +70,13 @@ def main():
 
     tf.keras.backend.clear_session()
 
-    # Setup libmolgrid to feed Examples into tensorflow objects
-    if args.ligmap is None or args.recmap is None:
-        # noinspection PyArgumentList
-        e = molgrid.ExampleProvider(
-            data_root=str(Path(args.data_root).expanduser()), balanced=False,
-            shuffle=True)
-    else:
-        rec_typer = molgrid.FileMappedGninaTyper(args.recmap)
-        lig_typer = molgrid.FileMappedGninaTyper(args.ligmap)
-        e = molgrid.ExampleProvider(
-            rec_typer, lig_typer,
-            data_root=str(Path(args.data_root).expanduser()), balanced=False,
-            shuffle=True)
-    e.populate(str(Path(args.train).expanduser()))
-
-    # noinspection PyArgumentList
-    gmaker = molgrid.GridMaker(
-        binary=args.binary_mask,
-        dimension=args.dimension,
-        resolution=args.resolution)
-
-    # noinspection PyArgumentList
-    dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (args.batch_size,) + dims
-    input_tensor = molgrid.MGrid5f(*tensor_shape)
-
-    # Train autoencoder
-    zero_losses, nonzero_losses, losses = [], [], []
-
     opt_args = {'lr': args.learning_rate, 'loss': args.loss}
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
 
     if ae is None:  # No loaded model
         ae = architectures[args.model](
-            dims,
+            get_dims(args.dimension, args.resolution, args.ligmap, args.recmap),
             encoding_size=args.encoding_size,
             optimiser=args.optimiser,
             **opt_args)
@@ -116,7 +87,6 @@ def main():
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
-    train_args = vars(args)
     train(ae, data_root=args.data_root, train_types=args.train,
           iterations=args.iterations, batch_size=args.batch_size,
           save_path=save_path, dimension=args.dimension,
@@ -167,13 +137,15 @@ def main():
         del gmaker, input_tensor
         with Timer() as t:
             calculate_encodings(encoder=ae,
-                                gmaker=gmaker,
-                                input_tensor=input_tensor,
                                 data_root=args.data_root,
+                                batch_size=args.batch_size,
                                 types_file=args.train,
                                 save_path=save_path,
+                                ligmap=args.ligmap,
+                                recmap=args.recmap,
                                 rotate=False,
-                                verbose=False)
+                                binary_mask=args.binary_mask
+                                )
         print('Encodings calculated and saved to {0} in {1} s'.format(
             save_path / 'encodings', t.interval))
 

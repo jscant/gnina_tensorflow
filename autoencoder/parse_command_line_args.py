@@ -149,6 +149,8 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument('--encoding_size', '-e', type=int, required=False,
                             default=50)
         parser.add_argument('--iterations', '-i', type=int, required=False)
+        parser.add_argument('--batch_size', '-b', type=int, required=False,
+                default=16, help='Number of examples per batch')
         parser.add_argument(
             '--save_interval', type=int, required=False, default=-1)
         parser.add_argument(

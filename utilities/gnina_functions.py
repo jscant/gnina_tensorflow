@@ -5,11 +5,37 @@ Created on Fri Jul 10 14:47:44 2020
 @brief: Utility functions for use in various machine learning models
 """
 
-import datetime
 import math
 import shutil
-import tensorflow as tf
 import time
+
+import tensorflow as tf
+
+
+def get_dims(dimension, resolution, ligmap, recmap):
+    """Get the dimensions for a given dimension, resolution and channel setting.
+
+    Arguments:
+        dimension: length of side of cube in which ligand is situated, in
+            Angstroms
+        resolution: resolution of voxelisation of cube in which ligand is
+            situated, in Angstroms
+        ligmap: text file with ligand channel setup
+        recmap: text file with receptor channel setup
+
+    Returns:
+        Tuple containing dimensions of gnina input
+    """
+    channels = 0
+    for fname in ligmap, recmap:
+        if fname is None:
+            c = 14
+        else:
+            with open(fname, 'r') as f:
+                c = sum([1 for line in f.readlines() if len(line)])
+        channels += c
+    length = int((dimension + 1) // resolution)
+    return channels, length, length, length
 
 
 class Timer:
@@ -44,7 +70,7 @@ def format_time(t):
     """
     if t < 0:
         raise ValueError('Time must be positive.')
-        
+
     t = int(math.floor(t))
     h = t // 3600
     m = (t - (h * 3600)) // 60
@@ -65,9 +91,9 @@ def print_with_overwrite(s):
     n_lines = len(lines)
     console_width = shutil.get_terminal_size((0, 20)).columns
     for idx in range(n_lines):
-        lines[idx] += ' '*max(0, console_width - len(lines[idx]))
+        lines[idx] += ' ' * max(0, console_width - len(lines[idx]))
     lines = '\n'.join(lines)
-    print((ERASE + UP_ONE)*(n_lines-1) + s, end='\r', flush=True)
+    print((ERASE + UP_ONE) * (n_lines - 1) + s, end='\r', flush=True)
 
 
 def get_test_info(test_file):
@@ -120,11 +146,11 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     if train and labels_tensor is None:
         raise RuntimeError('Labels must be provided for backpropagation',
                            'if train == True')
-        
+
     batch_size = input_tensor.shape[0]
     batch = example_provider.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=train)
-    
+
     if autoencoder is not None:
         inputs = [input_tensor.tonumpy()]
         try:
