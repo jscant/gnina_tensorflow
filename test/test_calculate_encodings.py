@@ -67,7 +67,7 @@ def test_calculate_encodings():
             rec = chunks[1]
             lig = chunks[2]
             labels[rec][lig] = label
-    
+
     for filename in Path(temporary_directory, 'encodings').glob('*.bin'):
         encodings = ge.protein()
         encodings.ParseFromString(open(filename, 'rb').read())

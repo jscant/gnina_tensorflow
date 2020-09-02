@@ -7,39 +7,62 @@ from autoencoder.autoencoder_definitions import nonzero_mae, composite_mse, \
     zero_mae, nonzero_mse, zero_mse
 
 
+def str_to_type(arg):
+    """Determine if a string can be converted into an int or float
+
+    Arguments:
+        arg: (string)
+
+    Returns:
+        str, float or int version of the input, depending on whether the input
+        is numeric and then whether it contains a decimal point.
+    """
+    try:
+        float(arg)
+    except ValueError:
+        return str(arg)
+    if arg.find('.') == -1:
+        return int(arg)
+    return float(arg)
+
+
 class LoadConfigTrain(argparse.Action):
     """Class for loading argparse arguments from a config file."""
 
     def __call__(self, parser, namespace, values, option_string=None):
-        """Overloaded function; See parent class."""
+        """Overloaded function; see parent class."""
 
         if values is None:
             return
         values = Path(values).expanduser()
-        config = values.parents[1] / 'config'
+        try:
+            config = values.parents[1] / 'config'
+        except IndexError:
+            print(values)
+            return
         if not config.exists():
             print('No config file found in experiment''s base directory '
                   '({})'.format(config))
             print('Only specified command line args will be used.')
             namespace.load_model = values
             return
-        args = ''
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
                 if not len(chunks):
                     continue
-                if chunks[0] not in ['load_model',
-                                     'absolute_save_path',
-                                     'use_cpu',
-                                     'binary_mask',
-                                     'save_encodings',
-                                     'verbose']:
-                    args += '--{0} {1}\n'.format(*chunks)
-                else:  # store_true args present a problem, loaded manually
-                    if chunks[1] == 'True':
-                        args += '--{0}\n'.format(chunks[0])
-        parser.parse_args(args.split(), namespace)
+                if len(chunks) == 1:
+                    setattr(namespace, chunks[0], True)
+                elif chunks[1] in ['True', 'False']:
+                    print(chunks)
+                    setattr(
+                        namespace, chunks[0],
+                        [False, True][chunks[1] == 'True'])
+                elif chunks[0] == 'name':
+                    setattr(namespace, *chunks)
+                elif chunks[0] not in ['load_model',
+                                       'absolute_save_path']:
+                    setattr(namespace, chunks[0], str_to_type(chunks[1]))
 
         # args.load_model is always None if we do not do this, even when
         # it is specified using --load_model.
@@ -62,35 +85,28 @@ class LoadConfigTest(argparse.Action):
             print('Only specified command line args will be used.')
             namespace.load_model = values
             return
-        args = ''
-        namespace.binary_mask = False
-        namespace.use_cpu = False
+
+        setattr(namespace, 'use_cpu', False)
+        setattr(namespace, 'binary_mask', False)
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
                 if not len(chunks):
                     continue
-                if chunks[0] in ['data_root', 'save_path']:
-                    args += '--{0} {1}\n'.format(*chunks)
+                if chunks[0] in ['data_root', 'save_path', 'ligmap', 'recmap']:
+                    setattr(namespace, *chunks)
                 elif chunks[0] in ['dimension', 'resolution']:
                     setattr(namespace, chunks[0], float(chunks[1]))
-                elif chunks[0] in ['ligmap', 'recmap']:
-                    setattr(namespace, *chunks)
                 elif chunks[0] in ['batch_size']:
                     setattr(namespace, chunks[0], int(chunks[1]))
-                else:  # store_true args present a problem, loaded manually
-                    if chunks[0] == 'binary_mask':
-                        if len(chunks) == 1 or chunks[1] == 'True':
-                            namespace.binary_mask = True
-                    if chunks[0] == 'use_cpu':
-                        if len(chunks) == 1 or chunks[1] == 'True':
-                            namespace.use_cpu = True
-
-        parser.parse_args(args.split(), namespace)
+                elif len(chunks) == 1 or chunks[1] == 'True':
+                    # store_true args present a problem, loaded manually
+                    if chunks[0] in ['binary_mask', 'use_cpu']:
+                        setattr(namespace, chunks[0], True)
 
         # args.load_model is always None if we do not do this, even when
         # it is specified using --load_model.
-        namespace.load_model = values
+        setattr(namespace, 'load_model', values)
 
 
 def pickup(path):
@@ -127,11 +143,12 @@ def pickup(path):
 def parse_command_line_args(test_or_train='train'):
     """Parse command line args and return as dict.
 
-    Returns a dictionary containing all args, default or otherwise; if 'pickup'
+    Returns a namespace containing all args, default or otherwise; if 'pickup'
     is specified, as many args as are contained in the config file for that
     (partially) trained model are loaded, otherwise defaults are given.
     Command line args override args found in the config of model found in
-    'pickup' directory.
+    'pickup' directory. Also returns either None (no loaded model) or a
+    keras loaded model (if loaded model is specified).
     """
 
     parser = argparse.ArgumentParser()
@@ -150,7 +167,7 @@ def parse_command_line_args(test_or_train='train'):
                             default=50)
         parser.add_argument('--iterations', '-i', type=int, required=False)
         parser.add_argument('--batch_size', '-b', type=int, required=False,
-                default=16, help='Number of examples per batch')
+                            default=16, help='Number of examples per batch')
         parser.add_argument(
             '--save_interval', type=int, required=False, default=-1)
         parser.add_argument(
@@ -196,7 +213,7 @@ def parse_command_line_args(test_or_train='train'):
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
-    parser.add_argument('--name', type=str, required=False)
+    parser.add_argument('--name', type=str, required=True)
     args = parser.parse_args()
 
     autoencoder = None
