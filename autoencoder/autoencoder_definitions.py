@@ -24,7 +24,7 @@ class AutoEncoderBase(tf.keras.Model):
     """Abstract parent class for autoencoders."""
 
     def __init__(self, dims, encoding_size=10,
-                 optimiser=tf.keras.optimizers.SGD,
+                 optimiser='sgd',
                  loss='mse',
                  hidden_activation='sigmoid',
                  final_activation='sigmoid',
