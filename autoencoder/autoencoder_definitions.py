@@ -20,121 +20,6 @@ from layers.layers import tf_transition_block, tf_inverse_transition_block, \
     tf_dense_block
 
 
-def nonzero_mse(target, reconstruction):
-    """Mean squared error for non-zero values in the target matrix
-
-    Finds the mean squared error for all parts of the input tensor which
-    are not equal to zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Mean squared error for all non-zero entries in the target
-    """
-    mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
-    masked_difference = (target - reconstruction) * mask
-    return tf.reduce_mean(tf.square(masked_difference))
-
-
-def zero_mse(target, reconstruction):
-    """Mean squared error for zero values in the target matrix
-
-    Finds the mean squared error for all parts of the input tensor which
-    are equal to zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Mean squared error for all zero entries in the target
-    """
-    mask = tf.cast(tf.equal(target, 0), tf.float32)
-    masked_difference = (target - reconstruction) * mask
-    return tf.reduce_mean(tf.square(masked_difference))
-
-
-def composite_mse(target, reconstruction, ratio):
-    """Weighted mean squared error of nonzero-only and zero-only inputs.
-
-    Finds the MSE between the autoencoder reconstruction and the nonzero
-    entries of the input, the MSE between the reconstruction and the zero
-    entries of the input and gives the weighted average of the two.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-        ratio: desired ratio of nonzero : zero
-
-    Returns:
-        Average weighted by:
-
-            ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
-
-        where nonzero_mse and zero_mse are the MSE for the nonzero and zero
-        parts of target respectively.
-    """
-    frac = tf.divide(ratio, 1 + ratio)
-    return tf.math.add(
-        tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
-        tf.math.multiply(1 - frac, zero_mse(target, reconstruction)))
-
-
-def mae(target, reconstruction):
-    """Mean absolute error loss function.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Tensor containing the mean absolute error between the target and
-        the reconstruction.
-    """
-    return tf.reduce_mean(tf.abs(target - reconstruction))
-
-
-def zero_mae(target, reconstruction):
-    """Mean absolute error loss function target values are zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Tensor containing the mean absolute error between the target and
-        the reconstruction where the mean is taken over values where
-        the target is equal to zero.
-        This can be NaN if there are no inputs equal to zero.
-    """
-    mask = tf.cast(tf.equal(target, 0), tf.float32)
-    masked_diff = (target - reconstruction) * mask
-    abs_diff = tf.abs(masked_diff)
-    return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
-
-
-def nonzero_mae(target, reconstruction):
-    """Mean absolute error loss function target values are not zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Tensor containing the mean absolute error between the target and
-        the reconstruction where the mean is taken over values where
-        the target is not zero.
-        This can be NaN if there are no nonzero inputs.
-    """
-    mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
-    mask_sum = tf.reduce_sum(mask)
-    masked_diff = (target - reconstruction) * mask
-    abs_diff = tf.abs(masked_diff)
-    return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
-
-
 class AutoEncoderBase(tf.keras.Model):
     """Virtual parent class for autoencoders."""
 
@@ -287,3 +172,118 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         reconstruction = Reshape(dims, name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
+
+
+def nonzero_mse(target, reconstruction):
+    """Mean squared error for non-zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are not equal to zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all non-zero entries in the target
+    """
+    mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
+    masked_difference = (target - reconstruction) * mask
+    return tf.reduce_mean(tf.square(masked_difference))
+
+
+def zero_mse(target, reconstruction):
+    """Mean squared error for zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are equal to zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all zero entries in the target
+    """
+    mask = tf.cast(tf.equal(target, 0), tf.float32)
+    masked_difference = (target - reconstruction) * mask
+    return tf.reduce_mean(tf.square(masked_difference))
+
+
+def composite_mse(target, reconstruction, ratio):
+    """Weighted mean squared error of nonzero-only and zero-only inputs.
+
+    Finds the MSE between the autoencoder reconstruction and the nonzero
+    entries of the input, the MSE between the reconstruction and the zero
+    entries of the input and gives the weighted average of the two.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        ratio: desired ratio of nonzero : zero
+
+    Returns:
+        Average weighted by:
+
+            ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
+
+        where nonzero_mse and zero_mse are the MSE for the nonzero and zero
+        parts of target respectively.
+    """
+    frac = tf.divide(ratio, 1 + ratio)
+    return tf.math.add(
+        tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
+        tf.math.multiply(1 - frac, zero_mse(target, reconstruction)))
+
+
+def mae(target, reconstruction):
+    """Mean absolute error loss function.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction.
+    """
+    return tf.reduce_mean(tf.abs(target - reconstruction))
+
+
+def zero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is equal to zero.
+        This can be NaN if there are no inputs equal to zero.
+    """
+    mask = tf.cast(tf.equal(target, 0), tf.float32)
+    masked_diff = (target - reconstruction) * mask
+    abs_diff = tf.abs(masked_diff)
+    return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
+
+
+def nonzero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are not zero.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is not zero.
+        This can be NaN if there are no nonzero inputs.
+    """
+    mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
+    mask_sum = tf.reduce_sum(mask)
+    masked_diff = (target - reconstruction) * mask
+    abs_diff = tf.abs(masked_diff)
+    return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
