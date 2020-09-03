@@ -41,6 +41,9 @@ class AutoEncoderBase(tf.keras.Model):
                 documentation)
         """
 
+        self.initialiser = tf.keras.initializers.HeNormal()  # weights init
+
+        # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
             self._construct_layers(
                 dims=dims,
@@ -52,6 +55,7 @@ class AutoEncoderBase(tf.keras.Model):
         if isinstance(optimiser, str):
             optimiser = tf.keras.optimizers.get(optimiser).__class__
 
+        # Composite mse requires an extra weight input
         inputs = [self.input_image]
         if loss == 'composite_mse':
             self.frac = Input(shape=(1,), dtype=tf.float32, name='frac')
@@ -141,10 +145,11 @@ class DenseAutoEncoder(AutoEncoderBase):
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
 
-        x = Dense(encoding_size)(x)
+        x = Dense(encoding_size, kernel_initializer=self.initialiser)(x)
         encoding = encoding_activation_layer(x)
 
-        decoding = Dense(reduce(mul, final_shape[1:]))(encoding)
+        decoding = Dense(reduce(mul, final_shape[1:]),
+                         kernel_initializer=self.initialiser)(encoding)
         decoding = decoding_activation_layer(decoding)
 
         reshaped = Reshape(final_shape[1:])(decoding)
@@ -158,6 +163,7 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         reconstruction = Conv3D(dims[0], 3,
                                 activation=final_activation,
+                                kernel_initializer=self.initialiser,
                                 data_format='channels_first',
                                 use_bias=False,
                                 padding='SAME', name='reconstruction')(x)

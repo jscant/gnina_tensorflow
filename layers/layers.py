@@ -85,6 +85,7 @@ def transition_block(x, reduction, name, activation='relu', final=False):
     Returns:
         output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, _ = generate_activation_layers(name, activation)
     bn_axis = 1
     x = BatchNormalization(
@@ -97,6 +98,7 @@ def transition_block(x, reduction, name, activation='relu', final=False):
 
     x = Conv3D(int(backend.int_shape(x)[bn_axis] * reduction), 1,
                data_format='channels_first', use_bias=False,
+               kernel_initializer=conv_initialiser,
                name=name + '_{}'.format(activation))(x)
     x = act_0(x)
     x = MaxPooling3D(2, strides=2, name=name + '_pool',
@@ -116,6 +118,7 @@ def inverse_transition_block(x, reduction, name, activation='relu'):
     Returns:
         output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, _ = generate_activation_layers(name, activation)
     bn_axis = 1
     x = BatchNormalization(
@@ -125,6 +128,7 @@ def inverse_transition_block(x, reduction, name, activation='relu'):
 
     x = Conv3D(int(backend.int_shape(x)[bn_axis] * reduction), 1,
                data_format='channels_first', use_bias=False,
+               kernel_initializer=conv_initialiser,
                name=name + '_{}'.format(activation))(x)
     x = act_0(x)
     x = UpSampling3D(2, name=name + '_upsample',
@@ -144,6 +148,7 @@ def conv_block(x, growth_rate, name, activation='relu'):
     Returns:
         Output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, _ = generate_activation_layers(name, activation)
     bn_axis = 1
     x1 = BatchNormalization(
@@ -153,6 +158,7 @@ def conv_block(x, growth_rate, name, activation='relu'):
     x1 = Conv3D(
         growth_rate, 3, use_bias=False, padding='same',
         name=name + '_0_{}'.format(activation),
+        kernel_initiaer=conv_initialiser,
         data_format='channels_first')(x1)
     x1 = act_0(x1)
     x = Concatenate(axis=bn_axis, name=name + '_concat')([x, x1])
@@ -190,6 +196,7 @@ def tf_transition_block(x, reduction, name, activation='relu', final=False):
     Returns:
       output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, _ = generate_activation_layers(name, activation)
     bn_axis = 1
     x = BatchNormalization(
@@ -201,6 +208,7 @@ def tf_transition_block(x, reduction, name, activation='relu', final=False):
         int(backend.int_shape(x)[bn_axis] * reduction),
         1,
         use_bias=False,
+        kernel_initializer=conv_initialiser,
         name=name + '_conv',
         data_format='channels_first')(x)
     x = MaxPooling3D(2, strides=2, name=name + '_pool',
@@ -220,6 +228,7 @@ def tf_inverse_transition_block(x, reduction, name, activation='relu'):
     Returns:
       output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, _ = generate_activation_layers(name, activation)
     bn_axis = 1
     x = BatchNormalization(
@@ -229,6 +238,7 @@ def tf_inverse_transition_block(x, reduction, name, activation='relu'):
         int(backend.int_shape(x)[bn_axis] * reduction),
         1,
         use_bias=False,
+        kernel_initializer=conv_initialiser,
         name=name + '_conv',
         data_format='channels_first')(x)
     x = UpSampling3D(2, name=name + '_upsampling',
@@ -248,6 +258,7 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
     Returns:
       Output tensor for the block.
     """
+    conv_initialiser = tf.keras.initializers.HeNormal()
     act_0, act_1 = generate_activation_layers(name, activation)
     bn_axis = 1
     x1 = BatchNormalization(
@@ -256,13 +267,14 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
     x1 = act_0(x1)
     x1 = Conv3D(
         4 * growth_rate, 1, use_bias=False, name=name + '_1_conv',
-        data_format='channels_first')(x1)
+        data_format='channels_first',
+        kernel_initializer=conv_initialiser)(x1)
     x1 = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
         x1)
     x1 = act_1(x1)
     x1 = Conv3D(
         growth_rate, 3, padding='same', use_bias=False, name=name + '_2_conv',
-        data_format='channels_first')(x1)
+        data_format='channels_first', kernel_initializer=conv_initialiser)(x1)
     x = Concatenate(axis=bn_axis, name=name + '_concat')([x, x1])
     return x
