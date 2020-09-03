@@ -21,7 +21,7 @@ from layers.layers import tf_transition_block, tf_inverse_transition_block, \
 
 
 class AutoEncoderBase(tf.keras.Model):
-    """Virtual parent class for autoencoders."""
+    """Abstract parent class for autoencoders."""
 
     def __init__(self, dims, encoding_size=10,
                  optimiser=tf.keras.optimizers.SGD,
@@ -35,6 +35,8 @@ class AutoEncoderBase(tf.keras.Model):
             optimiser: any keras optimisation class
             loss: any keras loss fuction (or string reference), or or
                 'unbalanced'/'composite_mse' (custom weighted loss functions)
+            hidden_activation: activation function for hidden layers
+            final_activation: activation function for reconstruction layer
             opt_args: arguments for the keras optimiser (see keras
                 documentation)
         """
