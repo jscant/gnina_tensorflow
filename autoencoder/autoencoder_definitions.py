@@ -104,8 +104,8 @@ class AutoEncoderBase(tf.keras.Model):
 
         Raises:
             NotImplementedError: if this method is not overridden by a class
-            inheriting from this (abstract) class, or if this (abstract) class
-            is initialised explicitly.
+                inheriting from this (abstract) class, or if this (abstract)
+                class is initialised explicitly.
         """
 
         raise NotImplementedError('construct_layers must be implemented '

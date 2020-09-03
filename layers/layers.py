@@ -1,3 +1,14 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 01 14:26:40 2020
+@author: scantleb
+@brief: Layer definitions for autoencoder and classifier. Includes both the
+        'old-style' dense blocks as well as the updated DenseNet-BC version,
+        as well as 'inverse-' dense and transition blocks, for upsampling in
+        autoencoder.
+"""
+
 import tensorflow as tf
 from tensorflow.keras import backend
 from tensorflow.keras.layers import Conv3D, MaxPooling3D, BatchNormalization, \

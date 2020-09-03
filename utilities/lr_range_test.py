@@ -219,6 +219,12 @@ if __name__ == '__main__':
     parser.add_argument('--resolution', '-r', type=float, required=False,
                         default=1.0,
                         help='Resolution of voxelisation in Angstroms')
+    parser.add_argument('--hidden_activation', type=str, required=False,
+                        default='sigmoid', help='Activation function for '
+                                                'hidden layers')
+    parser.add_argument('--final_activation', type=str, required=False,
+                        default='sigmoid', help='Activation function for '
+                                                'reconstruction layer')
     parser.add_argument('--ligmap', '-l', type=str, required=False,
                         default=None, help='Text file containing ligand channel'
                                            ' information')
@@ -249,6 +255,8 @@ if __name__ == '__main__':
         opt_args['nesterov'] = True
     m = autoencoder_class(
         dims, encoding_size=args.encoding_size, loss=args.loss,
+        hidden_activation=args.hidden_activation,
+        final_activation=args.final_activation,
         optimiser=args.opt, **opt_args)
     range_test = LRRangeTest(
         m, args.train_types, data_root=args.data_root, dimension=args.dimension,
