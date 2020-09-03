@@ -57,7 +57,7 @@ def main():
 
     tf.keras.backend.clear_session()
 
-    opt_args = {'lr': args.learning_rate, 'loss': args.loss}
+    opt_args = {'lr': args.learning_rate}
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
 
@@ -66,6 +66,9 @@ def main():
             get_dims(args.dimension, args.resolution, args.ligmap, args.recmap),
             encoding_size=args.encoding_size,
             optimiser=args.optimiser,
+            loss=args.loss,
+            hidden_activation=args.hidden_activation,
+            final_activation=args.final_activation,
             **opt_args)
 
     ae.summary()

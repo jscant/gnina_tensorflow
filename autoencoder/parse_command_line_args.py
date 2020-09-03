@@ -183,6 +183,9 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--loss', type=str, required=False, default='mse')
         parser.add_argument(
+            '--hidden_activation', type=str, required=False, default='sigmoid',
+            help='Activation function for hidden layers')
+        parser.add_argument(
             '--final_activation', type=str, required=False, default='sigmoid')
         parser.add_argument('--binary_mask', action='store_true')
         parser.add_argument(

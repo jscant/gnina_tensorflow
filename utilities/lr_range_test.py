@@ -68,6 +68,17 @@ class LRRangeTest:
         self.binary_mask = binary_mask
         self.initial_weights = model.get_weights()
 
+        self.metrics = {
+            'reconstruction':
+                [
+                    autoencoder_definitions.mae,
+                    autoencoder_definitions.nonzero_mae,
+                    autoencoder_definitions.zero_mae,
+                    autoencoder_definitions.zero_mse,
+                    autoencoder_definitions.nonzero_mse
+                ]
+        }
+
         # composite_mse is built differently to keras loss functions
         self.compile_args = {}
         if loss_fn != 'composite_mse':
@@ -105,7 +116,7 @@ class LRRangeTest:
         # the optimizer state (i.e. momentum)
         self.model._losses = []
         self.model._per_input_losses = {}
-        self.model.compile(optimizer=opt, metrics=self.model.metrics_,
+        self.model.compile(optimizer=opt, metrics=self.metrics,
                            **self.compile_args)
         self.model.set_weights(self.initial_weights)
 
