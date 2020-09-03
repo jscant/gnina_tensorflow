@@ -16,21 +16,7 @@ import tensorflow as tf
 from autoencoder import autoencoder_definitions
 from autoencoder.calculate_encodings import calculate_encodings
 from utilities import gnina_embeddings_pb2 as ge
-
-
-def wipe_directory(directory):
-    """Recursively removes all items in a directory, then the directory itself.
-    
-    Arguments:
-        directory: Location of directory to wipe (str or PosixPath)
-    """
-    directory = Path(directory)
-    for item in directory.iterdir():
-        if item.is_dir():
-            wipe_directory(item)
-        else:
-            item.unlink()
-    directory.rmdir()
+from utilities.gnina_functions import wipe_directory
 
 
 def test_calculate_encodings():

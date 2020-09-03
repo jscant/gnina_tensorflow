@@ -13,12 +13,14 @@ import molgrid
 import numpy as np
 import tensorflow as tf
 
-from utilities.gnina_functions import format_time, print_with_overwrite
+from utilities.gnina_functions import format_time, print_with_overwrite, \
+    wipe_directory
 
 
 def train(model, data_root, train_types, iterations, batch_size,
-          dimension, resolution, loss_fn, save_path=None, ligmap=None,
-          recmap=None, save_interval=-1, binary_mask=False, silent=False):
+          dimension, resolution, loss_fn, save_path=None,
+          overwrite_checkpoints=False, ligmap=None, recmap=None,
+          save_interval=-1, binary_mask=False, silent=False):
     """Train an autoencoder.
     
     Arguments:
@@ -38,6 +40,8 @@ def train(model, data_root, train_types, iterations, batch_size,
             line to be used in input grid construction
         save_interval: interval (in batches) on which model weights are saved as
             a checkpoint
+        overwrite_checkpoints: saved model states overwrite previously saved
+            ones from earlier in training
         binary_mask: instead of real numbers, input grid is binary where a 1
             indicates that the real input would have had a value greater than
             zero
@@ -85,6 +89,7 @@ def train(model, data_root, train_types, iterations, batch_size,
         save_path = Path(save_path)
         print('Working directory: {}'.format(save_path))
 
+    previous_checkpoint = None
     start_time = time.time()
     for iteration in range(iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
@@ -95,6 +100,11 @@ def train(model, data_root, train_types, iterations, batch_size,
                 'ckpt_model_{}'.format(iteration + 1)
             )
             model.save(checkpoint_path)
+
+            if overwrite_checkpoints:
+                if previous_checkpoint is not None:
+                    wipe_directory(previous_checkpoint)
+                previous_checkpoint = checkpoint_path
 
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
@@ -156,5 +166,13 @@ def train(model, data_root, train_types, iterations, batch_size,
         zero_losses.append(zero_mae)
         nonzero_losses.append(nonzero_mae)
         losses.append(loss['loss'])
+
+    # Save final trained autoencoder
+    checkpoint_path = Path(
+        save_path, 'checkpoints', 'final_model_{}'.format(iterations))
+    model.save(checkpoint_path)
+
+    if overwrite_checkpoints and previous_checkpoint is not None:
+        wipe_directory(previous_checkpoint)
 
     return losses, zero_losses, nonzero_losses

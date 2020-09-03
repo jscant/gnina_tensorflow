@@ -89,14 +89,10 @@ def main():
         ligmap=args.ligmap,
         recmap=args.recmap,
         save_interval=args.save_interval,
+        overwrite_checkpoints=args.overwrite_checkpoints,
         binary_mask=args.binary_mask
     )
     print('\nFinished training.')
-
-    # Save final trained autoencoder
-    checkpoint_path = Path(
-        save_path, 'checkpoints', 'final_model_{}'.format(args.iterations))
-    ae.save(checkpoint_path)
 
     # Plot zero, nonzero mse
     fig, ax1 = plt.subplots()

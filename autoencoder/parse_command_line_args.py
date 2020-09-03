@@ -194,6 +194,10 @@ def parse_command_line_args(test_or_train='train'):
             '--resolution', type=float, required=False, default=1.0)
         parser.add_argument(
             '--save_encodings', action='store_true')
+        parser.add_argument(
+            '--overwrite_checkpoints', action='store_true',
+            help='Each saved model state overwrites last'
+        )
         parser.add_argument('--recmap', type=str, required=False)
         parser.add_argument('--ligmap', type=str, required=False)
         parser.add_argument(

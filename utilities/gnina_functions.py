@@ -8,8 +8,45 @@ Created on Fri Jul 10 14:47:44 2020
 import math
 import shutil
 import time
+from pathlib import Path
 
 import tensorflow as tf
+
+
+class Timer:
+    """Simple timer class.
+
+    To time a block of code, wrap it like so:
+
+        with Timer() as t:
+            <some_code>
+        total_time = t.interval
+
+    The time taken for the code to execute is stored in t.interval.
+    """
+
+    def __enter__(self):
+        self.start = time.time()
+        return self
+
+    def __exit__(self, *args):
+        self.end = time.time()
+        self.interval = self.end - self.start
+
+
+def wipe_directory(directory):
+    """Recursively removes all items in a directory, then the directory itself.
+
+    Arguments:
+        directory: Location of directory to wipe (str or PosixPath)
+    """
+    directory = Path(directory)
+    for item in directory.iterdir():
+        if item.is_dir():
+            wipe_directory(item)
+        else:
+            item.unlink()
+    directory.rmdir()
 
 
 def get_dims(dimension, resolution, ligmap, recmap):
@@ -36,27 +73,6 @@ def get_dims(dimension, resolution, ligmap, recmap):
         channels += c
     length = int((dimension + 1) // resolution)
     return channels, length, length, length
-
-
-class Timer:
-    """Simple timer class.
-
-    To time a block of code, wrap it like so:
-
-        with Timer() as t:
-            <some_code>
-        total_time = t.interval
-
-    The time taken for the code to execute is stored in t.interval.
-    """
-
-    def __enter__(self):
-        self.start = time.time()
-        return self
-
-    def __exit__(self, *args):
-        self.end = time.time()
-        self.interval = self.end - self.start
 
 
 def format_time(t):
