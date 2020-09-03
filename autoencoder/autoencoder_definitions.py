@@ -17,7 +17,7 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     Reshape
 
 from layers.layers import tf_transition_block, tf_inverse_transition_block, \
-    tf_dense_block
+    tf_dense_block, generate_activation_layers
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -122,6 +122,12 @@ class DenseAutoEncoder(AutoEncoderBase):
                           final_activation='sigmoid'):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
+        encoding_activation_layer, _ = generate_activation_layers(
+            'encoding', hidden_activation, append_name_info=False)
+
+        decoding_activation_layer, _ = generate_activation_layers(
+            'decoding', hidden_activation, append_name_info=False)
+
         input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
 
@@ -135,10 +141,12 @@ class DenseAutoEncoder(AutoEncoderBase):
         final_shape = x.shape
         x = Flatten(data_format='channels_first')(x)
 
-        encoding = Dense(encoding_size, activation=hidden_activation,
-                         name='encoding')(x)
+        x = Dense(encoding_size)(x)
+        encoding = encoding_activation_layer(x)
 
         decoding = Dense(reduce(mul, final_shape[1:]))(encoding)
+        decoding = decoding_activation_layer(decoding)
+
         reshaped = Reshape(final_shape[1:])(decoding)
 
         x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1',
@@ -151,6 +159,7 @@ class DenseAutoEncoder(AutoEncoderBase):
         reconstruction = Conv3D(dims[0], 3,
                                 activation=final_activation,
                                 data_format='channels_first',
+                                use_bias=False,
                                 padding='SAME', name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
@@ -164,11 +173,16 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                           final_activation='sigmoid'):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
+        encoding_activation_layer, _ = generate_activation_layers(
+            'encoding', hidden_activation, append_name_info=False)
+
         input_image = Input(shape=dims, dtype=tf.float32,
                             name='input_image')
         x = Flatten()(input_image)
-        encoding = Dense(
-            encoding_size, name='encoding', activation=hidden_activation)(x)
+
+        x = Dense(encoding_size)(x)
+        encoding = encoding_activation_layer(x)
+
         x = Dense(np.prod(dims),
                   activation=final_activation)(encoding)
         reconstruction = Reshape(dims, name='reconstruction')(x)
