@@ -73,12 +73,13 @@ def main():
 
     ae.summary()
 
-    if args.loss not in ['composite_mse', 'unbalanced_loss']:
+    if args.loss != 'composite_mse':
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
     losses, nonzero_losses, zero_losses = train(
-        ae, data_root=args.data_root,
+        ae,
+        data_root=args.data_root,
         train_types=args.train,
         iterations=args.iterations,
         batch_size=args.batch_size,

@@ -23,7 +23,9 @@ from layers.layers import tf_transition_block, tf_inverse_transition_block, \
 class AutoEncoderBase(tf.keras.Model):
     """Abstract parent class for autoencoders."""
 
-    def __init__(self, dims, encoding_size=10,
+    def __init__(self,
+                 dims,
+                 encoding_size=10,
                  optimiser='sgd',
                  loss='mse',
                  hidden_activation='sigmoid',
@@ -91,9 +93,8 @@ class AutoEncoderBase(tf.keras.Model):
             layer, tf.keras.layers.Layer)]
 
     @abstractmethod
-    def _construct_layers(self, dims, encoding_size=10,
-                          hidden_activation='sigmoid',
-                          final_activation='sigmoid'):
+    def _construct_layers(self, dims, encoding_size, hidden_activation,
+                          final_activation):
         """Setup for autoencoder architecture (abstract method).
 
         Arguments:
@@ -121,14 +122,12 @@ class AutoEncoderBase(tf.keras.Model):
 class DenseAutoEncoder(AutoEncoderBase):
     """Convolutional autoencoder with Dense connectivity."""
 
-    def _construct_layers(self, dims, encoding_size=10,
-                          hidden_activation='sigmoid',
-                          final_activation='sigmoid'):
+    def _construct_layers(self, dims, encoding_size, hidden_activation,
+                          final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
         encoding_activation_layer, _ = generate_activation_layers(
             'encoding', hidden_activation, append_name_info=False)
-
         decoding_activation_layer, _ = generate_activation_layers(
             'decoding', hidden_activation, append_name_info=False)
 
@@ -174,9 +173,8 @@ class DenseAutoEncoder(AutoEncoderBase):
 class SingleLayerAutoEncoder(AutoEncoderBase):
     """Single layer nonconvolutional autoencoder."""
 
-    def _construct_layers(self, dims, encoding_size=10,
-                          hidden_activation='sigmoid',
-                          final_activation='sigmoid'):
+    def _construct_layers(self, dims, encoding_size, hidden_activation,
+                          final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
         encoding_activation_layer, _ = generate_activation_layers(
@@ -209,7 +207,7 @@ def nonzero_mse(target, reconstruction):
     Returns:
         Mean squared error for all non-zero entries in the target
     """
-    mask = 1. - tf.cast(tf.equal(target, 0), tf.float32)
+    mask = tf.cast(tf.not_equal(target, 0), tf.float32)
     masked_difference = (target - reconstruction) * mask
     return tf.reduce_mean(tf.square(masked_difference))
 
@@ -243,6 +241,8 @@ def composite_mse(target, reconstruction, ratio):
         target: input tensor
         reconstruction: output tensor of the autoencoder
         ratio: desired ratio of nonzero : zero
+        _num: this should be a tf.constant(1., dtype=float32) [used to ensure
+            we can use plot_model]
 
     Returns:
         Average weighted by:
@@ -252,10 +252,10 @@ def composite_mse(target, reconstruction, ratio):
         where nonzero_mse and zero_mse are the MSE for the nonzero and zero
         parts of target respectively.
     """
-    frac = tf.divide(ratio, 1 + ratio)
+    frac = tf.divide(ratio, 1. + ratio)
     return tf.math.add(
         tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
-        tf.math.multiply(1 - frac, zero_mse(target, reconstruction)))
+        tf.math.multiply(1. - frac, zero_mse(target, reconstruction)))
 
 
 def mae(target, reconstruction):
