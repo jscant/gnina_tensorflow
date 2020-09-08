@@ -121,3 +121,50 @@ class WarmRestartCosine(LearningRateSchedule):
             'beta': self.beta,
             'cycle': self.cycle
         }
+
+
+class StepWiseDecay(LearningRateSchedule):
+    """Step-wise decay rate scheduler.
+
+    Every t iterations, the learning rate is reduced by multiplying it by
+    0 < beta < 1. This gives a learning rate which follows a step-wise
+    approximation to exponential decay. The learning rate will never fall
+    below the minimum learning rate specified.
+    """
+
+    def __init__(self, min_lr, max_lr, t=2500, beta=0.5):
+        """Instantiate step-wise decay scheduler.
+
+        Arguments:
+            min_lr: the minimum learning rate
+            max_lr: the maximum learning rate
+            t: number of iterations at each learning rate
+            beta: multiplier for learning rate at the end of each
+                decay_time iterations
+        """
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.t = t
+        self.beta = beta
+
+    def __call__(self, step):
+        """Overloaded method; see base class (LearningRateSchedule).
+
+        Returns learning rate given the training step.
+
+        Arguments:
+            step: current training iteration
+        """
+        step = K.get_value(step)
+        stage = step // self.t
+        prospective_lr = self.max_lr * (self.beta ** stage)
+        return max(self.min_lr, prospective_lr)
+
+    def get_config(self):
+        """Overloaded method; see base class (LearningRateSchedule)."""
+        return {
+            'min_lr': self.min_lr,
+            'max_lr': self.max_lr,
+            't': self.t,
+            'beta': self.beta
+        }

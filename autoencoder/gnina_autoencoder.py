@@ -79,11 +79,15 @@ def main():
         elif args.learning_rate_schedule == 'warm_restarts':
             scheduler = schedules.WarmRestartCosine
             lrs_kwargs.update(
-                {'beta': args.warm_beta, 'period': args.warm_period})
+                {'beta': args.lrs_beta, 'period': args.lrs_period})
+        elif args.learning_rate_schedule == 'stepwise':
+            scheduler = schedules.StepWiseDecay
+            lrs_kwargs.update(
+                {'t': args.lrs_period, 'beta': args.lrs_beta})
         else:
             raise RuntimeError(
-                'learning_rate_schedule must be one of "1cycle" or '
-                '"warm_restarts".')
+                'learning_rate_schedule must be one of "1cycle", '
+                '"warm_restarts" or "stepwise".')
         lrs = scheduler(*lrs_args, **lrs_kwargs)
 
         opt_args = {'weight_decay': 1e-4}
