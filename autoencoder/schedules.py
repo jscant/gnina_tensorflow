@@ -71,7 +71,7 @@ class OneCycle(LearningRateSchedule):
 class WarmRestartCosine(LearningRateSchedule):
     """Cosine decay scheduler with warm restarts.
 
-    The learn rate starts at a maximum value, and decays following a cosine
+    The learning rate starts at a maximum value, and decays following a cosine
     decay (a graph which looks like cos(x), 0 <= x < pi) to the minimum value.
     It then jumps back up the the maximum, and decays again, in a process that
     is repeated every T iterations. The hyperparameters for this are therefore

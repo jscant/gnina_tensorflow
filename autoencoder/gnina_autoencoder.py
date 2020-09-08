@@ -80,6 +80,10 @@ def main():
             scheduler = schedules.WarmRestartCosine
             lrs_kwargs.update(
                 {'beta': args.warm_beta, 'period': args.warm_period})
+        else:
+            raise RuntimeError(
+                'learning_rate_schedule must be one of "1cycle" or '
+                '"warm_restarts".')
         lrs = scheduler(*lrs_args, **lrs_kwargs)
 
         opt_args = {'weight_decay': 1e-4}
