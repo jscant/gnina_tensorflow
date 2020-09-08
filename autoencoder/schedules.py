@@ -42,7 +42,7 @@ class OneCycle(LearningRateSchedule):
         self.peak_iter = np.floor(0.45 * iterations)
 
     def __call__(self, step):
-        """Overloaded method; see base class (LearningRateScheduler).
+        """Overloaded method; see base class (LearningRateSchedule).
 
         Returns learning rate given the training step.
 
@@ -58,11 +58,66 @@ class OneCycle(LearningRateSchedule):
         return (phase * phase_1_lr) + ((1 - phase) * phase_2_lr)
 
     def get_config(self):
-        """Overloaded method; see base class (LearningRateScheduler)."""
+        """Overloaded method; see base class (LearningRateSchedule)."""
         return {
             'min_lr': self.min_lr,
             'max_lr': self.max_lr,
             'range': self.range,
             'iterations': self.iterations,
             'peak_iter': self.peak_iter,
+        }
+
+
+class WarmRestartCosine(LearningRateSchedule):
+    """Cosine decay scheduler with warm restarts.
+
+    The learn rate starts at a maximum value, and decays following a cosine
+    decay (a graph which looks like cos(x), 0 <= x < pi) to the minimum value.
+    It then jumps back up the the maximum, and decays again, in a process that
+    is repeated every T iterations. The hyperparameters for this are therefore
+    the period, the maximum and minimum learning rates, and the rate at which
+    the maximum learning rate decays every cycle.
+    """
+
+    def __init__(self, min_lr, max_lr, period, beta=1.0):
+        """Instantiate warm resetart scheduler.
+
+        Arguments:
+            min_lr: the minimum learning rate
+            max_lr: the maximum learning rate
+            period: period over which to repeat the learning rate pattern
+            beta: sets rate of decay of max_lr every cycle (restart). If set
+                to 1, max_lr remains the same between cycles; values less than
+                1 cause exponential decay in the maximum learning rate
+        """
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.period = period
+        self.beta = beta
+        self.cycle = 0
+
+    def __call__(self, step):
+        """Overloaded method; see base class (LearningRateSchedule).
+
+        Returns learning rate given the training step.
+
+        Arguments:
+            step: current training iteration
+        """
+        step = K.get_value(step)
+        self.cycle = step // self.period
+        decayed_max_lr = max(
+            self.min_lr, self.max_lr * (self.beta ** self.cycle))
+        rng = decayed_max_lr - self.min_lr
+        progress = (step % self.period) / self.period
+        return self.min_lr + 0.5 * rng * (np.cos(np.pi * progress) + 1)
+
+    def get_config(self):
+        """Overloaded method; see base class (LearningRateSchedule)."""
+        return {
+            'min_lr': self.min_lr,
+            'max_lr': self.max_lr,
+            'period': self.period,
+            'beta': self.beta,
+            'cycle': self.cycle
         }

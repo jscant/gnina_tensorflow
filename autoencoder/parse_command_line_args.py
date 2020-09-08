@@ -179,11 +179,26 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--learning_rate', '-l', type=float, required=False)
         parser.add_argument(
+            '--learning_rate_schedule', type=str, required=False, default=None,
+            help='Learning rate schedule to use, one of "1cycle" or '
+                 '"warm_restarts". Only compatible with adamw and sgdw '
+                 'optimisers.'
+        )
+        parser.add_argument(
             '--min_lr', type=float, required=False, default=-1.,
             help='Min learning rate for 1-cycle learning rate scheduling')
         parser.add_argument(
             '--max_lr', type=float, required=False, default=-1.,
             help='Max learning rate for 1-cycle learning rate scheduling')
+        parser.add_argument(
+            '--warm_period', type=int, required=False, default=2000,
+            help='Period over which to repeat the "warm_restarts" learning '
+                 'rate pattern.'
+        )
+        parser.add_argument(
+            '--warm_beta', type=float, required=False, default=1.0,
+            help='Beta value for "warm_restarts" learning rate schedule.'
+        )
         parser.add_argument(
             '--momentum', type=float, required=False, default=0.0)
         parser.add_argument(

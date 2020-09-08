@@ -65,8 +65,23 @@ def main():
                 'Learning rate scheduling only compatible with AdamW and SGDW '
                 'optimisers.'
             )
-        lrs = schedules.OneCycle(
-            args.min_lr, args.max_lr, args.iterations)
+        if args.learning_rate_schedule is None:
+            raise RuntimeError(
+                'Max and min learning rates must be used in conjunction with '
+                'a learning rate schedule.'
+            )
+
+        lrs_args = [args.min_lr, args.max_lr]
+        lrs_kwargs = {}
+        if args.learning_rate_schedule == '1cycle':
+            scheduler = schedules.OneCycle
+            lrs_kwargs.update({'iterations': args.iterations})
+        elif args.learning_rate_schedule == 'warm_restarts':
+            scheduler = schedules.WarmRestartCosine
+            lrs_kwargs.update(
+                {'beta': args.warm_beta, 'period': args.warm_period})
+        lrs = scheduler(*lrs_args, **lrs_kwargs)
+
         opt_args = {'weight_decay': 1e-4}
     else:
         opt_args = {'lr': args.learning_rate}
