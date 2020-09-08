@@ -14,8 +14,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import backend as K
 
-from utilities.gnina_functions import format_time, print_with_overwrite, \
-    wipe_directory
+from utilities.gnina_functions import format_time, wipe_directory, \
+    print_with_overwrite
 
 
 def train(model, data_root, train_types, iterations, batch_size,
@@ -156,12 +156,15 @@ def train(model, data_root, train_types, iterations, batch_size,
             print('\n')
 
         if not silent:
-            console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | '
-                              'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f} | lr: {8:0.10f}'
-                              '\nTime elapsed {6} | Time remaining: {7}') \
-                .format(iteration, iterations, loss_fn, loss['loss'],
-                        nonzero_mae, zero_mae, format_time(time_elapsed),
-                        formatted_eta, K.get_value(model.optimizer.learning_rate))
+            console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
+                              'Time remaining: {7}'
+                              '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
+                              '| Zero MAE: {5:0.4f} | Learning rate: {8:.3e}')
+            console_output = console_output.format(
+                iteration, iterations, loss_fn, loss['loss'], nonzero_mae,
+                zero_mae, format_time(time_elapsed), formatted_eta,
+                K.get_value(model.optimizer.learning_rate)
+            )
             print_with_overwrite(console_output)
 
         if save_path is not None:
