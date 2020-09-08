@@ -15,7 +15,8 @@ import tensorflow as tf
 from matplotlib import pyplot as plt
 from tensorflow.python.util import deprecation
 
-from autoencoder import autoencoder_definitions, parse_command_line_args
+from autoencoder import autoencoder_definitions, parse_command_line_args, \
+    schedules
 from autoencoder.calculate_encodings import calculate_encodings
 from autoencoder.train import train
 from utilities.gnina_functions import Timer, get_dims
@@ -57,7 +58,15 @@ def main():
 
     tf.keras.backend.clear_session()
 
-    opt_args = {'lr': args.learning_rate}
+    # Use learning rate schedule or single learning rate
+    if args.max_lr > 0 and args.min_lr > 0:
+        lrs = schedules.OneCycle(
+            args.min_lr, args.max_lr, args.iterations)
+        opt_args = {'weight_decay': 1e-4}
+    else:
+        opt_args = {'lr': args.learning_rate}
+        lrs = None
+
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
 
@@ -91,7 +100,8 @@ def main():
         recmap=args.recmap,
         save_interval=args.save_interval,
         overwrite_checkpoints=args.overwrite_checkpoints,
-        binary_mask=args.binary_mask
+        binary_mask=args.binary_mask,
+        lrs=lrs
     )
     print('\nFinished training.')
 

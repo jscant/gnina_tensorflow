@@ -13,6 +13,7 @@ from operator import mul
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_addons as tfa
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     Reshape
 
@@ -54,6 +55,8 @@ class AutoEncoderBase(tf.keras.Model):
                 final_activation=final_activation)
 
         # If optimiser is a string, turn it into a keras optimiser object
+        if optimiser == 'adamw':
+            optimiser = tfa.optimizers.AdamW
         if isinstance(optimiser, str):
             optimiser = tf.keras.optimizers.get(optimiser).__class__
 
@@ -241,8 +244,6 @@ def composite_mse(target, reconstruction, ratio):
         target: input tensor
         reconstruction: output tensor of the autoencoder
         ratio: desired ratio of nonzero : zero
-        _num: this should be a tf.constant(1., dtype=float32) [used to ensure
-            we can use plot_model]
 
     Returns:
         Average weighted by:

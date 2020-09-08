@@ -179,6 +179,12 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--learning_rate', '-l', type=float, required=False)
         parser.add_argument(
+            '--min_lr', type=float, required=False, default=-1.,
+            help='Min learning rate for 1-cycle learning rate scheduling')
+        parser.add_argument(
+            '--max_lr', type=float, required=False, default=-1.,
+            help='Max learning rate for 1-cycle learning rate scheduling')
+        parser.add_argument(
             '--momentum', type=float, required=False, default=0.0)
         parser.add_argument(
             '--loss', type=str, required=False, default='mse')

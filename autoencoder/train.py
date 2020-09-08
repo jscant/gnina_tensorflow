@@ -12,6 +12,7 @@ from pathlib import Path
 import molgrid
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, print_with_overwrite, \
     wipe_directory
@@ -20,7 +21,7 @@ from utilities.gnina_functions import format_time, print_with_overwrite, \
 def train(model, data_root, train_types, iterations, batch_size,
           dimension, resolution, loss_fn, save_path=None,
           overwrite_checkpoints=False, ligmap=None, recmap=None,
-          save_interval=-1, binary_mask=False, silent=False):
+          save_interval=-1, binary_mask=False, lrs=None, silent=False):
     """Train an autoencoder.
     
     Arguments:
@@ -45,6 +46,9 @@ def train(model, data_root, train_types, iterations, batch_size,
         binary_mask: instead of real numbers, input grid is binary where a 1
             indicates that the real input would have had a value greater than
             zero
+        lrs: learning rate schedule, which is either a class from
+            tf.keras.optimizers.learning.schedules.LearningRateSchedule or a
+            function which takes a single argument and returns a learning rate
         silent: when True, print statements are suppressed, no output is written
             to disk (checkpoints, loss history)
 
@@ -106,6 +110,9 @@ def train(model, data_root, train_types, iterations, batch_size,
                     wipe_directory(previous_checkpoint)
                 previous_checkpoint = checkpoint_path
 
+        if lrs is not None:
+            K.set_value(model.optimizer.learning_rate, lrs(iteration))
+
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
@@ -150,11 +157,11 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         if not silent:
             console_output = ('Iteration: {0}/{1} | loss({2}): {3:0.4f} | '
-                              'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f}'
+                              'nonzero_mae: {4:0.4f} | zero_mae: {5:0.4f} | lr: {8:0.10f}'
                               '\nTime elapsed {6} | Time remaining: {7}') \
                 .format(iteration, iterations, loss_fn, loss['loss'],
                         nonzero_mae, zero_mae, format_time(time_elapsed),
-                        formatted_eta)
+                        formatted_eta, K.get_value(model.optimizer.learning_rate))
             print_with_overwrite(console_output)
 
         if save_path is not None:
