@@ -168,3 +168,31 @@ class StepWiseDecay(LearningRateSchedule):
             't': self.t,
             'beta': self.beta
         }
+
+
+class ConstantLearningRateSchedule(LearningRateSchedule):
+    """Learning rate scheduler which does not change learning rate."""
+
+    def __init__(self, learning_rate):
+        """Instantiate constant learning rate schedule
+
+        Arguments:
+            learning_rate/lr: constant learning rate
+        """
+        self.lr = learning_rate
+
+    def __call__(self, step):
+        """Overloaded method; see base class (LearningRateSchedule).
+
+        Returns learning rate given the training step.
+
+        Arguments:
+            step: current training iteration
+        """
+        return self.lr
+
+    def get_config(self):
+        """Overloaded method; see base class (LearningRateSchedule)."""
+        return {
+            'lr': self.lr
+        }

@@ -21,7 +21,7 @@ from utilities.gnina_functions import format_time, wipe_directory, \
 def train(model, data_root, train_types, iterations, batch_size,
           dimension, resolution, loss_fn, save_path=None,
           overwrite_checkpoints=False, ligmap=None, recmap=None,
-          save_interval=-1, binary_mask=False, lrs=None, silent=False):
+          save_interval=-1, binary_mask=False, silent=False):
     """Train an autoencoder.
     
     Arguments:
@@ -46,9 +46,6 @@ def train(model, data_root, train_types, iterations, batch_size,
         binary_mask: instead of real numbers, input grid is binary where a 1
             indicates that the real input would have had a value greater than
             zero
-        lrs: learning rate schedule, which is either a class from
-            tf.keras.optimizers.learning.schedules.LearningRateSchedule or a
-            function which takes a single argument and returns a learning rate
         silent: when True, print statements are suppressed, no output is written
             to disk (checkpoints, loss history)
 
@@ -110,8 +107,9 @@ def train(model, data_root, train_types, iterations, batch_size,
                     wipe_directory(previous_checkpoint)
                 previous_checkpoint = checkpoint_path
 
-        if lrs is not None:
-            K.set_value(model.optimizer.learning_rate, lrs(iteration))
+        # Use learning rate scheduler to find learning rate
+        K.set_value(model.optimizer.learning_rate,
+                    model.learning_rate_schedule(iteration))
 
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)

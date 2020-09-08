@@ -89,11 +89,10 @@ def main():
                 'learning_rate_schedule must be one of "1cycle", '
                 '"warm_restarts" or "stepwise".')
         lrs = scheduler(*lrs_args, **lrs_kwargs)
-
         opt_args = {'weight_decay': 1e-4}
     else:
         opt_args = {'lr': args.learning_rate}
-        lrs = None
+        lrs = schedules.ConstantLearningRateSchedule(args.learning_rate)
 
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
@@ -106,6 +105,7 @@ def main():
             loss=args.loss,
             hidden_activation=args.hidden_activation,
             final_activation=args.final_activation,
+            learning_rate_schedule=lrs,
             **opt_args)
 
     ae.summary()
@@ -129,7 +129,6 @@ def main():
         save_interval=args.save_interval,
         overwrite_checkpoints=args.overwrite_checkpoints,
         binary_mask=args.binary_mask,
-        lrs=lrs
     )
     print('\nFinished training.')
 

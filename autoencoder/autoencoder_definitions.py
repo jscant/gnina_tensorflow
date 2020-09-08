@@ -31,6 +31,7 @@ class AutoEncoderBase(tf.keras.Model):
                  loss='mse',
                  hidden_activation='sigmoid',
                  final_activation='sigmoid',
+                 learning_rate_schedule=None,
                  **opt_args):
         """Setup and compilation of autoencoder.
 
@@ -40,11 +41,15 @@ class AutoEncoderBase(tf.keras.Model):
                 'unbalanced'/'composite_mse' (custom weighted loss functions)
             hidden_activation: activation function for hidden layers
             final_activation: activation function for reconstruction layer
+            learning_rate_schedule: instance of class derived from
+                LearningRateSchedule which can be called with the iteration
+                number as an argument to give a learning rate
             opt_args: arguments for the keras optimiser (see keras
                 documentation)
         """
 
         self.initialiser = tf.keras.initializers.HeNormal()  # weights init
+        self.learning_rate_schedule = learning_rate_schedule
 
         # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
@@ -122,6 +127,12 @@ class AutoEncoderBase(tf.keras.Model):
                                   'in classes inherited from AutoEncoderBase. '
                                   'AutoEncoderBase is an abstract class and '
                                   'should not be initialised.')
+
+    def get_config(self):
+        """Overloaded method; see base class (tf.keras.Model)."""
+        config = super().get_config()
+        config.update({'learning_rate_schedule': self.learning_rate_schedule})
+        return config
 
 
 class DenseAutoEncoder(AutoEncoderBase):
