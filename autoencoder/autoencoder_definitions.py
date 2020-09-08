@@ -57,7 +57,9 @@ class AutoEncoderBase(tf.keras.Model):
         # If optimiser is a string, turn it into a keras optimiser object
         if optimiser == 'adamw':
             optimiser = tfa.optimizers.AdamW
-        if isinstance(optimiser, str):
+        elif optimiser == 'sgdw':
+            optimiser = tfa.optimizers.SGDW
+        elif isinstance(optimiser, str):
             optimiser = tf.keras.optimizers.get(optimiser).__class__
 
         # Composite mse requires an extra weight input

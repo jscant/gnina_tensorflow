@@ -60,6 +60,11 @@ def main():
 
     # Use learning rate schedule or single learning rate
     if args.max_lr > 0 and args.min_lr > 0:
+        if args.optimiser not in ['sgdw', 'adamw']:
+            raise RuntimeError(
+                'Learning rate scheduling only compatible with AdamW and SGDW '
+                'optimisers.'
+            )
         lrs = schedules.OneCycle(
             args.min_lr, args.max_lr, args.iterations)
         opt_args = {'weight_decay': 1e-4}
