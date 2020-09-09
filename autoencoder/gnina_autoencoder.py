@@ -37,8 +37,29 @@ def main():
                      'dense': autoencoder_definitions.DenseAutoEncoder}
 
     molgrid.set_gpu_enabled(1 - args.use_cpu)
+
+    barred_args = ['resume']
+    loss_log = None
+    starting_iter = 0
+    if args.resume:
+        if not args.load_model:
+            raise RuntimeError(
+                '--resume must be used in conjunction with load_model')
+        log_fname = Path(
+            args.load_model).expanduser().parents[1] / 'loss_log.txt'
+        starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
+        with open(log_fname, 'r') as f:
+            loss_log = '\n'.join(f.read().split('\n')[:starting_iter+1]) + '\n'
+        barred_args.append('load_model')
+
     arg_str = '\n'.join(
-        ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
+        [
+            '{0} {1}'.format(param, argument)
+            for param, argument
+            in vars(args).items()
+            if param not in barred_args
+        ]
+    )
 
     save_path = Path(args.save_path, args.name).expanduser().resolve()
 
@@ -53,8 +74,9 @@ def main():
     arg_str += '\nabsolute_save_path {}\n'.format(save_path)
     print(arg_str)
 
-    with open(save_path / 'config', 'w') as f:
-        f.write(arg_str)
+    if not args.resume:
+        with open(save_path / 'config', 'w') as f:
+            f.write(arg_str)
 
     tf.keras.backend.clear_session()
 
@@ -107,6 +129,8 @@ def main():
             final_activation=args.final_activation,
             learning_rate_schedule=lrs,
             **opt_args)
+    else:
+        ae.learning_rate_schedule = lrs
 
     ae.summary()
 
@@ -129,6 +153,8 @@ def main():
         save_interval=args.save_interval,
         overwrite_checkpoints=args.overwrite_checkpoints,
         binary_mask=args.binary_mask,
+        loss_log=loss_log,
+        starting_iter=starting_iter
     )
     print('\nFinished training.')
 

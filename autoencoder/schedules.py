@@ -37,7 +37,6 @@ class OneCycle(LearningRateSchedule):
         """
         self.min_lr = min_lr
         self.max_lr = max_lr
-        self.range = max_lr - min_lr
         self.iterations = iterations
         self.peak_iter = np.floor(0.45 * iterations)
 
@@ -51,10 +50,11 @@ class OneCycle(LearningRateSchedule):
         """
         step = K.get_value(step)
         phase = float(step <= self.peak_iter)
+        rng = self.max_lr - self.min_lr
         progress = (step - self.peak_iter) / (self.iterations - self.peak_iter)
-        phase_1_lr = self.min_lr + (step / self.peak_iter) * self.range
+        phase_1_lr = self.min_lr + (step / self.peak_iter) * rng
         phase_2_lr = self.min_lr + (
-                self.range * 0.5 * (np.cos(np.pi * progress) + 1))
+                rng * 0.5 * (np.cos(np.pi * progress) + 1))
         return (phase * phase_1_lr) + ((1 - phase) * phase_2_lr)
 
     def get_config(self):
@@ -62,7 +62,6 @@ class OneCycle(LearningRateSchedule):
         return {
             'min_lr': self.min_lr,
             'max_lr': self.max_lr,
-            'range': self.range,
             'iterations': self.iterations,
             'peak_iter': self.peak_iter,
         }
@@ -94,7 +93,6 @@ class WarmRestartCosine(LearningRateSchedule):
         self.max_lr = max_lr
         self.period = period
         self.beta = beta
-        self.cycle = 0
 
     def __call__(self, step):
         """Overloaded method; see base class (LearningRateSchedule).
@@ -105,9 +103,9 @@ class WarmRestartCosine(LearningRateSchedule):
             step: current training iteration
         """
         step = K.get_value(step)
-        self.cycle = step // self.period
+        cycle = step // self.period
         decayed_max_lr = max(
-            self.min_lr, self.max_lr * (self.beta ** self.cycle))
+            self.min_lr, self.max_lr * (self.beta ** cycle))
         rng = decayed_max_lr - self.min_lr
         progress = (step % self.period) / self.period
         return self.min_lr + 0.5 * rng * (np.cos(np.pi * progress) + 1)
@@ -119,7 +117,6 @@ class WarmRestartCosine(LearningRateSchedule):
             'max_lr': self.max_lr,
             'period': self.period,
             'beta': self.beta,
-            'cycle': self.cycle
         }
 
 

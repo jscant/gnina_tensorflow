@@ -21,7 +21,8 @@ from utilities.gnina_functions import format_time, wipe_directory, \
 def train(model, data_root, train_types, iterations, batch_size,
           dimension, resolution, loss_fn, save_path=None,
           overwrite_checkpoints=False, ligmap=None, recmap=None,
-          save_interval=-1, binary_mask=False, silent=False):
+          save_interval=-1, binary_mask=False, silent=False,
+          loss_log=None, starting_iter=0):
     """Train an autoencoder.
     
     Arguments:
@@ -48,6 +49,11 @@ def train(model, data_root, train_types, iterations, batch_size,
             zero
         silent: when True, print statements are suppressed, no output is written
             to disk (checkpoints, loss history)
+        loss_log: string containing losses up to the point of the start of
+            training; if None, a new string (and loss_log.txt file) is
+            generated.
+        starting_iter: which iteration to start training from; used for
+            resumption of training from a saved checkpoint
 
     Returns:
         Three lists containing the loss history, mean average error for inputs
@@ -86,15 +92,20 @@ def train(model, data_root, train_types, iterations, batch_size,
     # Train autoencoder
     zero_losses, nonzero_losses, losses = [], [], []
 
+    # Composite mse loss ratio
     loss_ratio = 0.5
-    loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean learning_rate\n'
+
+    # Are we loading previous loss history or starting afresh?
+    if loss_log is None:
+        loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean learning_rate\n'
+
     if not silent and save_path is not None:
         save_path = Path(save_path)
         print('Working directory: {}'.format(save_path))
 
     previous_checkpoint = None
     start_time = time.time()
-    for iteration in range(iterations):
+    for iteration in range(starting_iter, iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
                 and iteration < iterations - 1:
             checkpoint_path = Path(

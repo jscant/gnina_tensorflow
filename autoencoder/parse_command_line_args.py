@@ -21,7 +21,7 @@ def str_to_type(arg):
         float(arg)
     except ValueError:
         return str(arg)
-    if arg.find('.') == -1:
+    if arg.find('.') == -1 and arg.find('e') == -1:
         return int(arg)
     return float(arg)
 
@@ -35,11 +35,7 @@ class LoadConfigTrain(argparse.Action):
         if values is None:
             return
         values = Path(values).expanduser()
-        try:
-            config = values.parents[1] / 'config'
-        except IndexError:
-            print(values)
-            return
+        config = values.parents[1] / 'config'
         if not config.exists():
             print('No config file found in experiment''s base directory '
                   '({})'.format(config))
@@ -49,12 +45,11 @@ class LoadConfigTrain(argparse.Action):
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
-                if not len(chunks):
+                if not len(chunks) or chunks[0] == 'resume':
                     continue
                 if len(chunks) == 1:
                     setattr(namespace, chunks[0], True)
                 elif chunks[1] in ['True', 'False']:
-                    print(chunks)
                     setattr(
                         namespace, chunks[0],
                         [False, True][chunks[1] == 'True'])
@@ -162,6 +157,12 @@ def parse_command_line_args(test_or_train='train'):
                  'saved when the original model was trained; any options '
                  'specified in the command line will override the options '
                  'loaded from the config file.')
+        parser.add_argument('--resume', action='store_true',
+                            help='Loaded model is resumed as if it had never '
+                                 'been stopped. Losses are appended to the end '
+                                 'of the existing loss_log.txt and the '
+                                 'iteration count starts where the loaded '
+                                 'model left off.')
         parser.add_argument("--train", '-t', type=str, required=False)
         parser.add_argument('--encoding_size', '-e', type=int, required=False,
                             default=50)
@@ -242,7 +243,7 @@ def parse_command_line_args(test_or_train='train'):
         '--save_path', '-s', type=str, required=False, default='.')
     parser.add_argument(
         '--use_cpu', '-g', action='store_true')
-    parser.add_argument('--name', type=str, required=True)
+    parser.add_argument('--name', type=str, required=False)
     args = parser.parse_args()
 
     autoencoder = None
