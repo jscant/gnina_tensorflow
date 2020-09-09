@@ -56,18 +56,20 @@ def train(model, data_root, train_types, iterations, batch_size,
     """
     # Setup libmolgrid to feed Examples into tensorflow objects
     save_interval = save_interval if save_interval > 0 else iterations + 10
+    example_provider_kwargs = {
+        'data_root': str(Path(data_root).expanduser()), 'balanced': False,
+        'shuffle': True, 'cache_structs': False
+    }
     if ligmap is None or recmap is None:
         # noinspection PyArgumentList
         e = molgrid.ExampleProvider(
-            data_root=str(Path(data_root).expanduser()), balanced=False,
-            shuffle=True)
+            **example_provider_kwargs
+        )
     else:
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e = molgrid.ExampleProvider(
-            rec_typer, lig_typer,
-            data_root=str(Path(data_root).expanduser()), balanced=False,
-            shuffle=True)
+            rec_typer, lig_typer, **example_provider_kwargs)
     e.populate(str(Path(train_types).expanduser()))
 
     # noinspection PyArgumentList
