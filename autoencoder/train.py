@@ -161,7 +161,7 @@ def train(model, data_root, train_types, iterations, batch_size,
             iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero, lr)
 
         time_elapsed = time.time() - start_time
-        time_per_iter = time_elapsed / (iteration + 1)
+        time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
