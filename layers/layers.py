@@ -15,7 +15,8 @@ from tensorflow.keras.layers import Conv3D, MaxPooling3D, BatchNormalization, \
     UpSampling3D, Concatenate, Activation, PReLU, ThresholdedReLU
 
 
-def generate_activation_layers(block_name, activation, append_name_info=True):
+def generate_activation_layers(block_name, activation, n_layers,
+                               append_name_info=True):
     """Generate activation layers from strings representing activation layers.
 
     Arguments:
@@ -24,34 +25,33 @@ def generate_activation_layers(block_name, activation, append_name_info=True):
             standard keras string to AF names ('relu', 'sigmoid', etc.), or
             one of either 'prelu' (Parameterised ReLU) or 'threlu'
             (Thresholded ReLU)
+        n_layers: number of activation layers to return
         append_name_info: add activation function information to name
 
     Returns:
-        Two activation layers with the stipulated activation functions.
+        n_layers activation layers with the stipulated activation functions.
     """
-    if append_name_info:
-        act_0_name = '{0}_0_{1}'.format(block_name, activation)
-        act_1_name = '{0}_1_{1}'.format(block_name, activation)
-    else:
-        act_0_name = block_name
-        act_1_name = block_name
+    name_template = '{0}_{{0}}_{1}'.format(block_name, activation)
 
-    if activation == 'prelu':
-        act_0 = PReLU(
-            name=act_0_name,
-            alpha_initializer=tf.keras.initializers.constant(0.1))
-        act_1 = PReLU(
-            name=act_1_name,
-            alpha_initializer=tf.keras.initializers.constant(0.1))
-    elif activation == 'threlu':
-        act_0 = ThresholdedReLU(theta=1.0, name=act_0_name)
-        act_1 = ThresholdedReLU(theta=1.0, name=act_1_name)
-    else:
-        act_0 = Activation(
-            activation, name=act_0_name)
-        act_1 = Activation(
-            activation, name=act_1_name)
-    return act_0, act_1
+    outputs = []
+    for i in range(n_layers):
+        if append_name_info:
+            act_name = name_template.format(i)
+        else:
+            act_name = block_name
+        if activation == 'prelu':
+            outputs.append(
+                PReLU(
+                    name=act_name,
+                    alpha_initializer=tf.keras.initializers.constant(0.1)
+                ))
+        elif activation == 'threlu':
+            outputs.append(
+                ThresholdedReLU(theta=1.0, name=act_name)
+            )
+        else:
+            outputs.append(Activation(activation, name=act_name))
+    return outputs[0] if len(outputs) == 1 else tuple(outputs)
 
 
 def dense_block(x, blocks, name, activation='relu'):
@@ -86,7 +86,7 @@ def transition_block(x, reduction, name, activation='relu', final=False):
         output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation)
+    act_0 = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -119,7 +119,7 @@ def inverse_transition_block(x, reduction, name, activation='relu'):
         output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation)
+    act_0 = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -149,7 +149,7 @@ def conv_block(x, growth_rate, name, activation='relu'):
         Output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation)
+    act_0, _ = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x1 = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -197,7 +197,7 @@ def tf_transition_block(x, reduction, name, activation='relu', final=False):
       output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation)
+    act_0, _ = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
@@ -229,7 +229,7 @@ def tf_inverse_transition_block(x, reduction, name, activation='relu'):
       output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation)
+    act_0, _ = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
@@ -259,7 +259,7 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
       Output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, act_1 = generate_activation_layers(name, activation)
+    act_0, act_1 = generate_activation_layers(name, activation, 1)
     bn_axis = 1
     x1 = BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(

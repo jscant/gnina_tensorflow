@@ -142,19 +142,21 @@ class DenseAutoEncoder(AutoEncoderBase):
                           final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
-        encoding_activation_layer, _ = generate_activation_layers(
-            'encoding', hidden_activation, append_name_info=False)
-        decoding_activation_layer, _ = generate_activation_layers(
-            'decoding', hidden_activation, append_name_info=False)
+        encoding_activation_layer = generate_activation_layers(
+            'encoding', hidden_activation, 1, append_name_info=False)
+        decoding_activation_layer = generate_activation_layers(
+            'decoding', hidden_activation, 1, append_name_info=False)
 
         input_image = Input(
             shape=dims, dtype=tf.float32, name='input_image')
 
+        blocks = 8
+
         # Hidden layers
-        x = tf_dense_block(input_image, 8, "db_1", hidden_activation)
+        x = tf_dense_block(input_image, blocks, "db_1", hidden_activation)
         x = tf_transition_block(x, 0.5, "tb_1", hidden_activation)
 
-        x = tf_dense_block(x, 8, "db_2", hidden_activation)
+        x = tf_dense_block(x, blocks, "db_2", hidden_activation)
         x = tf_transition_block(x, 0.5, 'tb_2', hidden_activation)
 
         final_shape = x.shape
@@ -171,10 +173,10 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1',
                                         hidden_activation)
-        x = tf_dense_block(x, 8, 'idb_1', hidden_activation)
+        x = tf_dense_block(x, blocks, 'idb_1', hidden_activation)
 
         x = tf_inverse_transition_block(x, 0.5, 'itb_2', hidden_activation)
-        x = tf_dense_block(x, 8, 'idb_2', hidden_activation)
+        x = tf_dense_block(x, blocks, 'idb_2', hidden_activation)
 
         reconstruction = Conv3D(dims[0], 3,
                                 activation=final_activation,
@@ -193,8 +195,8 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
                           final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
-        encoding_activation_layer, _ = generate_activation_layers(
-            'encoding', hidden_activation, append_name_info=False)
+        encoding_activation_layer = generate_activation_layers(
+            'encoding', hidden_activation, 1, append_name_info=False)
 
         input_image = Input(shape=dims, dtype=tf.float32,
                             name='input_image')
