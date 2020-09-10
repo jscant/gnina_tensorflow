@@ -194,12 +194,13 @@ def train(model, data_root, train_types, iterations, batch_size,
         nonzero_losses.append(nonzero_mae)
         losses.append(loss['loss'])
 
-    # Save final trained autoencoder
-    checkpoint_path = Path(
-        save_path, 'checkpoints', 'final_model_{}'.format(iterations))
-    model.save(checkpoint_path)
+    if save_path is not None:
+        # Save final trained autoencoder
+        checkpoint_path = Path(
+            save_path, 'checkpoints', 'final_model_{}'.format(iterations))
+        model.save(checkpoint_path)
 
-    if overwrite_checkpoints and previous_checkpoint is not None:
-        wipe_directory(previous_checkpoint)
+        if overwrite_checkpoints and previous_checkpoint is not None:
+            wipe_directory(previous_checkpoint)
 
     return losses, zero_losses, nonzero_losses
