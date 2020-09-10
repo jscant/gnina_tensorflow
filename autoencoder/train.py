@@ -121,8 +121,13 @@ def train(model, data_root, train_types, iterations, batch_size,
                 previous_checkpoint = checkpoint_path
 
         # Use learning rate scheduler to find learning rate
-        K.set_value(model.optimizer.learning_rate,
-                    model.learning_rate_schedule(iteration))
+
+        if isinstance(model.learning_rate_schedule,
+                      tf.keras.optimizers.schedules.LearningRateSchedule):
+            lr = model.learning_rate_schedule(iteration)
+            K.set_value(model.optimizer.learning_rate, lr)
+        else:
+            lr = K.get_value(model.optimizer.learning_rate)
 
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
