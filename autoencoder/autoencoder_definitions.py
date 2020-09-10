@@ -212,6 +212,70 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         return input_image, encoding, reconstruction
 
 
+class MultiLayerAutoEncoder(AutoEncoderBase):
+    """Single layer nonconvolutional autoencoder."""
+
+    def _construct_layers(self, dims, encoding_size, hidden_activation,
+                          final_activation):
+        """Overloaded method; see base class (AutoeEncoderBase)"""
+
+        encoding_activation_layer = generate_activation_layers(
+            'encoding', hidden_activation, 1, append_name_info=False)
+
+        conv_activation = generate_activation_layers(
+            'conv', hidden_activation, 1, append_name_info=True)
+
+        input_image = Input(shape=dims, dtype=tf.float32,
+                            name='input_image')
+
+        conv_args = {'padding': 'same',
+                     'data_format': 'channels_first',
+                     'use_bias': False}
+
+        bn_axis = 1
+
+        x = Conv3D(128, 3, 2, **conv_args)(input_image)
+        x = conv_activation(x)
+        x = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = Conv3D(256, 3, 2, **conv_args)(x)
+        x = conv_activation(x)
+        x = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = Conv3D(512, 3, 2, **conv_args)(x)
+        x = conv_activation(x)
+        x = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+        final_shape = x.shape[1:]
+
+        x = Flatten(data_format='channels_first')(x)
+
+        x = Dense(encoding_size)(x)
+        encoding = encoding_activation_layer(x)
+
+        x = Dense(np.prod(final_shape))(x)
+        x = conv_activation(x)
+        x = Reshape(final_shape)(x)
+
+        x = Conv3DTranspose(256, 3, 2, **conv_args)(x)
+        x = conv_activation(x)
+        x = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = Conv3DTranspose(128, 3, 2, **conv_args)(x)
+        x = conv_activation(x)
+        x = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        reconstruction = Conv3DTranspose(dims[0], 3, 2, name='reconstruction',
+                                         activation=final_activation,
+                                         **conv_args)(x)
+
+        return input_image, encoding, reconstruction
+
+
 def nonzero_mse(target, reconstruction):
     """Mean squared error for non-zero values in the target matrix
 

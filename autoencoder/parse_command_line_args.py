@@ -174,7 +174,8 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--model', '-m', type=str, required=False, default='single',
             help='Model architecture; one of single (SingleLayerAutoencoder' +
-                 ') or dense (DenseAutoEncodcer)')
+                 '), multi (MultiLayerAutoEncoder) or dense '
+                 '(DenseAutoEncodcer)')
         parser.add_argument(
             '--optimiser', '-o', type=str, required=False, default='sgd')
         parser.add_argument(

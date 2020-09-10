@@ -34,7 +34,8 @@ def main():
 
     # For use later when defining model
     architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
-                     'dense': autoencoder_definitions.DenseAutoEncoder}
+                     'dense': autoencoder_definitions.DenseAutoEncoder,
+                     'multi': autoencoder_definitions.MultiLayerAutoEncoder}
 
     molgrid.set_gpu_enabled(1 - args.use_cpu)
 
@@ -49,7 +50,8 @@ def main():
             args.load_model).expanduser().parents[1] / 'loss_log.txt'
         starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
         with open(log_fname, 'r') as f:
-            loss_log = '\n'.join(f.read().split('\n')[:starting_iter+1]) + '\n'
+            loss_log = '\n'.join(
+                f.read().split('\n')[:starting_iter + 1]) + '\n'
         barred_args.append('load_model')
 
     arg_str = '\n'.join(
