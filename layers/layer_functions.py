@@ -7,6 +7,9 @@ Created on Fri Sep 11 09:12:15 2020
 @brief: Functions for generating keras layers.
 """
 
+import tensorflow as tf
+from tensorflow.keras import layers
+
 
 def generate_activation_layers(block_name, activation, n_layers,
                                append_name_info=True):
@@ -34,14 +37,14 @@ def generate_activation_layers(block_name, activation, n_layers,
             act_name = block_name
         if activation == 'prelu':
             outputs.append(
-                PReLU(
+                layers.PReLU(
                     name=act_name,
                     alpha_initializer=tf.keras.initializers.constant(0.1)
                 ))
         elif activation == 'threlu':
             outputs.append(
-                ThresholdedReLU(theta=1.0, name=act_name)
+                layers.ThresholdedReLU(theta=1.0, name=act_name)
             )
         else:
-            outputs.append(Activation(activation, name=act_name))
+            outputs.append(layers.Activation(activation, name=act_name))
     return outputs[0] if len(outputs) == 1 else tuple(outputs)

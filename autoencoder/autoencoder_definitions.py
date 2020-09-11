@@ -170,12 +170,12 @@ class DenseAutoEncoder(AutoEncoderBase):
 
         reshaped = layers.Reshape(final_shape[1:])(decoding)
 
-        x = dense.tf_inverse_transition_block(reshaped, 0.5, 'itb_1',
-                                              hidden_activation)
+        x = dense.tf_inverse_transition_block(
+            reshaped, 0.5, 'itb_1',hidden_activation)
         x = dense.tf_dense_block(x, blocks, 'idb_1', hidden_activation)
 
-        x = dense.tf_inverse_transition_block(x, 0.5, 'itb_2',
-                                              hidden_activation)
+        x = dense.tf_inverse_transition_block(
+            x, 0.5, 'itb_2', hidden_activation)
         x = dense.tf_dense_block(x, blocks, 'idb_2', hidden_activation)
 
         reconstruction = layers.Conv3D(dims[0], 3,
@@ -293,13 +293,13 @@ class ResidualAutoEncoder(AutoEncoderBase):
         conv_blocks = 2
 
         x = residual.ResBlock(
-            conv_blocks, 64, 5, 2, hidden_activation, 'res_1_1')(input_image)
+            conv_blocks, 64, 3, 2, hidden_activation, 'res_1_1')(input_image)
         x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
                               'res_1_2')(x)
         x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
                               'res_1_3')(x)
 
-        x = residual.ResBlock(conv_blocks, 128, 5, 2, hidden_activation,
+        x = residual.ResBlock(conv_blocks, 128, 3, 2, hidden_activation,
                               'res_2_1')(x)
         x = residual.ResBlock(conv_blocks, 128, 3, 1, hidden_activation,
                               'res_2_2')(x)
@@ -328,14 +328,14 @@ class ResidualAutoEncoder(AutoEncoderBase):
         x = residual.InverseResBlock(
             conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_2')(x)
         x = residual.InverseResBlock(
-            conv_blocks, 128, 5, 2, hidden_activation, 'inv_res_2_3')(x)
+            conv_blocks, 128, 3, 2, hidden_activation, 'inv_res_2_3')(x)
 
         x = residual.InverseResBlock(
             conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_1')(x)
         x = residual.InverseResBlock(
             conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_2')(x)
         x = residual.InverseResBlock(
-            conv_blocks, 64, 5, 2, hidden_activation, 'inv_res_3_3')(x)
+            conv_blocks, 64, 3, 2, hidden_activation, 'inv_res_3_3')(x)
 
         reconstruction = layers.Reshape(dims, name='reconstruction')(x)
 
