@@ -108,6 +108,10 @@ class LRRangeTest:
             over inputs equal to zero, and the mean average error over inputs
             greater than zero.
         """
+
+        # Let's not build multiple memory-intensive graphs
+        tf.keras.backend.clear_session()
+
         print('\nlr', lr)
         self.opt_args['learning_rate'] = lr
         opt = self.model.optimizer.__class__(**self.opt_args)
