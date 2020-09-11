@@ -22,7 +22,7 @@ import tensorflow.keras as keras
 from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     MaxPooling3D, GlobalMaxPooling3D
 
-from layers import layers
+from layers import dense
 
 
 def define_baseline_model(dims):
@@ -82,11 +82,11 @@ def define_densefs_model(dims, bc=False):
     input_layer = Input(shape=dims, dtype=tf.float32)
 
     if bc:
-        db = layers.tf_dense_block
-        tb = layers.tf_transition_block
+        db = dense.tf_dense_block
+        tb = dense.tf_transition_block
     else:
-        db = layers.dense_block
-        tb = layers.transition_block
+        db = dense.dense_block
+        tb = dense.transition_block
 
     # Hidden layers
     x = MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2),

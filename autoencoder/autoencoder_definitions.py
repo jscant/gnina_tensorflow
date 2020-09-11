@@ -14,12 +14,10 @@ from operator import mul
 import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
-from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
-    Reshape
+from tensorflow.keras import layers
 
-from layers.layers import tf_transition_block, tf_inverse_transition_block, \
-    tf_dense_block, generate_activation_layers, ResBlock, InverseResBlock, \
-    BatchNormalization, Conv3DTranspose
+from layers import dense, residual
+from layers.layer_functions import generate_activation_layers
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -71,7 +69,7 @@ class AutoEncoderBase(tf.keras.Model):
         # Composite mse requires an extra weight input
         inputs = [self.input_image]
         if loss == 'composite_mse':
-            self.frac = Input(shape=(1,), dtype=tf.float32, name='frac')
+            self.frac = layers.Input(shape=(1,), dtype=tf.float32, name='frac')
             inputs.append(self.frac)
 
         super().__init__(
@@ -137,7 +135,7 @@ class AutoEncoderBase(tf.keras.Model):
 
 
 class DenseAutoEncoder(AutoEncoderBase):
-    """Convolutional autoencoder with Dense connectivity."""
+    """Convolutional autoencoder with layers.Dense connectivity."""
 
     def _construct_layers(self, dims, encoding_size, hidden_activation,
                           final_activation):
@@ -148,43 +146,44 @@ class DenseAutoEncoder(AutoEncoderBase):
         decoding_activation_layer = generate_activation_layers(
             'decoding', hidden_activation, 1, append_name_info=False)
 
-        input_image = Input(
+        input_image = layers.Input(
             shape=dims, dtype=tf.float32, name='input_image')
 
         blocks = 8
 
         # Hidden layers
-        x = tf_dense_block(input_image, blocks, "db_1", hidden_activation)
-        x = tf_transition_block(x, 0.5, "tb_1", hidden_activation)
+        x = dense.tf_dense_block(input_image, blocks, "db_1", hidden_activation)
+        x = dense.tf_transition_block(x, 0.5, "tb_1", hidden_activation)
 
-        x = tf_dense_block(x, blocks, "db_2", hidden_activation)
-        x = tf_transition_block(x, 0.5, 'tb_2', hidden_activation)
+        x = dense.tf_dense_block(x, blocks, "db_2", hidden_activation)
+        x = dense.tf_transition_block(x, 0.5, 'tb_2', hidden_activation)
 
         final_shape = x.shape
-        x = Flatten(data_format='channels_first')(x)
+        x = layers.Flatten(data_format='channels_first')(x)
 
-        x = Dense(encoding_size, kernel_initializer=self.initialiser)(x)
+        x = layers.Dense(encoding_size, kernel_initializer=self.initialiser)(x)
         encoding = encoding_activation_layer(x)
 
-        decoding = Dense(reduce(mul, final_shape[1:]),
-                         kernel_initializer=self.initialiser)(encoding)
+        decoding = layers.Dense(reduce(mul, final_shape[1:]),
+                                kernel_initializer=self.initialiser)(encoding)
         decoding = decoding_activation_layer(decoding)
 
-        reshaped = Reshape(final_shape[1:])(decoding)
+        reshaped = layers.Reshape(final_shape[1:])(decoding)
 
-        x = tf_inverse_transition_block(reshaped, 0.5, 'itb_1',
-                                        hidden_activation)
-        x = tf_dense_block(x, blocks, 'idb_1', hidden_activation)
+        x = dense.tf_inverse_transition_block(reshaped, 0.5, 'itb_1',
+                                              hidden_activation)
+        x = dense.tf_dense_block(x, blocks, 'idb_1', hidden_activation)
 
-        x = tf_inverse_transition_block(x, 0.5, 'itb_2', hidden_activation)
-        x = tf_dense_block(x, blocks, 'idb_2', hidden_activation)
+        x = dense.tf_inverse_transition_block(x, 0.5, 'itb_2',
+                                              hidden_activation)
+        x = dense.tf_dense_block(x, blocks, 'idb_2', hidden_activation)
 
-        reconstruction = Conv3D(dims[0], 3,
-                                activation=final_activation,
-                                kernel_initializer=self.initialiser,
-                                data_format='channels_first',
-                                use_bias=False,
-                                padding='SAME', name='reconstruction')(x)
+        reconstruction = layers.Conv3D(dims[0], 3,
+                                       activation=final_activation,
+                                       kernel_initializer=self.initialiser,
+                                       data_format='channels_first',
+                                       use_bias=False,
+                                       padding='SAME', name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
 
@@ -199,16 +198,16 @@ class SingleLayerAutoEncoder(AutoEncoderBase):
         encoding_activation_layer = generate_activation_layers(
             'encoding', hidden_activation, 1, append_name_info=False)
 
-        input_image = Input(shape=dims, dtype=tf.float32,
-                            name='input_image')
-        x = Flatten()(input_image)
+        input_image = layers.Input(shape=dims, dtype=tf.float32,
+                                   name='input_image')
+        x = layers.Flatten()(input_image)
 
-        x = Dense(encoding_size)(x)
+        x = layers.Dense(encoding_size)(x)
         encoding = encoding_activation_layer(x)
 
-        x = Dense(np.prod(dims),
-                  activation=final_activation)(encoding)
-        reconstruction = Reshape(dims, name='reconstruction')(x)
+        x = layers.Dense(np.prod(dims),
+                         activation=final_activation)(encoding)
+        reconstruction = layers.Reshape(dims, name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
 
@@ -226,8 +225,8 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         conv_activation = generate_activation_layers(
             'conv', hidden_activation, 1, append_name_info=True)
 
-        input_image = Input(shape=dims, dtype=tf.float32,
-                            name='input_image')
+        input_image = layers.Input(shape=dims, dtype=tf.float32,
+                                   name='input_image')
 
         conv_args = {'padding': 'same',
                      'data_format': 'channels_first',
@@ -235,44 +234,45 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
 
         bn_axis = 1
 
-        x = Conv3D(128, 3, 2, **conv_args)(input_image)
+        x = layers.Conv3D(128, 3, 2, **conv_args)(input_image)
         x = conv_activation(x)
-        x = BatchNormalization(
+        x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = Conv3D(256, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(256, 3, 2, **conv_args)(x)
         x = conv_activation(x)
-        x = BatchNormalization(
+        x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = Conv3D(512, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(512, 3, 2, **conv_args)(x)
         x = conv_activation(x)
-        x = BatchNormalization(
+        x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
         final_shape = x.shape[1:]
 
-        x = Flatten(data_format='channels_first')(x)
+        x = layers.Flatten(data_format='channels_first')(x)
 
-        x = Dense(encoding_size)(x)
+        x = layers.Dense(encoding_size)(x)
         encoding = encoding_activation_layer(x)
 
-        x = Dense(np.prod(final_shape))(x)
+        x = layers.Dense(np.prod(final_shape))(x)
         x = conv_activation(x)
-        x = Reshape(final_shape)(x)
+        x = layers.Reshape(final_shape)(x)
 
-        x = Conv3DTranspose(256, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(256, 3, 2, **conv_args)(x)
         x = conv_activation(x)
-        x = BatchNormalization(
+        x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = Conv3DTranspose(128, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(128, 3, 2, **conv_args)(x)
         x = conv_activation(x)
-        x = BatchNormalization(
+        x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        reconstruction = Conv3DTranspose(dims[0], 3, 2, name='reconstruction',
-                                         activation=final_activation,
-                                         **conv_args)(x)
+        reconstruction = layers.Conv3DTranspose(dims[0], 3, 2,
+                                                name='reconstruction',
+                                                activation=final_activation,
+                                                **conv_args)(x)
 
         return input_image, encoding, reconstruction
 
@@ -287,51 +287,57 @@ class ResidualAutoEncoder(AutoEncoderBase):
         encoding_activation_layer = generate_activation_layers(
             'encoding', hidden_activation, 1, append_name_info=False)
 
-        input_image = Input(shape=dims, dtype=tf.float32,
-                            name='input_image')
+        input_image = layers.Input(shape=dims, dtype=tf.float32,
+                                   name='input_image')
 
         conv_blocks = 2
 
-        x = ResBlock(
+        x = residual.ResBlock(
             conv_blocks, 64, 5, 2, hidden_activation, 'res_1_1')(input_image)
-        x = ResBlock(conv_blocks, 64, 3, 1, hidden_activation, 'res_1_2')(x)
-        x = ResBlock(conv_blocks, 64, 3, 1, hidden_activation, 'res_1_3')(x)
+        x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
+                              'res_1_2')(x)
+        x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
+                              'res_1_3')(x)
 
-        x = ResBlock(conv_blocks, 128, 5, 2, hidden_activation, 'res_2_1')(x)
-        x = ResBlock(conv_blocks, 128, 3, 1, hidden_activation, 'res_2_2')(x)
-        x = ResBlock(conv_blocks, 128, 3, 1, hidden_activation, 'res_2_3')(x)
+        x = residual.ResBlock(conv_blocks, 128, 5, 2, hidden_activation,
+                              'res_2_1')(x)
+        x = residual.ResBlock(conv_blocks, 128, 3, 1, hidden_activation,
+                              'res_2_2')(x)
+        x = residual.ResBlock(conv_blocks, 128, 3, 1, hidden_activation,
+                              'res_2_3')(x)
 
-        x = ResBlock(conv_blocks, 256, 3, 2, hidden_activation, 'res_3_1')(x)
+        x = residual.ResBlock(conv_blocks, 256, 3, 2, hidden_activation,
+                              'res_3_1')(x)
 
         final_shape = x.shape[1:]
 
-        x = Flatten(data_format='channels_first')(x)
+        x = layers.Flatten(data_format='channels_first')(x)
 
-        x = Dense(encoding_size)(x)
+        x = layers.Dense(encoding_size)(x)
         encoding = encoding_activation_layer(x)
 
-        x = Dense(np.prod(final_shape),
-                  activation=final_activation)(encoding)
-        x = Reshape(final_shape)(x)
+        x = layers.Dense(np.prod(final_shape),
+                         activation=final_activation)(encoding)
+        x = layers.Reshape(final_shape)(x)
 
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 256, 3, 2, hidden_activation, 'inv_res_1_1')(x)
 
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_1')(x)
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_2')(x)
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 128, 5, 2, hidden_activation, 'inv_res_2_3')(x)
 
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_1')(x)
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_2')(x)
-        x = InverseResBlock(
+        x = residual.InverseResBlock(
             conv_blocks, 64, 5, 2, hidden_activation, 'inv_res_3_3')(x)
 
-        reconstruction = Reshape(dims, name='reconstruction')(x)
+        reconstruction = layers.Reshape(dims, name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
 
