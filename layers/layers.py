@@ -12,7 +12,8 @@ Created on Tue Sep 01 14:26:40 2020
 import tensorflow as tf
 from tensorflow.keras import backend
 from tensorflow.keras.layers import Conv3D, MaxPooling3D, BatchNormalization, \
-    UpSampling3D, Concatenate, Activation, PReLU, ThresholdedReLU
+    UpSampling3D, Concatenate, Activation, PReLU, ThresholdedReLU, Add, \
+    Conv3DTranspose
 
 
 def generate_activation_layers(block_name, activation, n_layers,
@@ -278,3 +279,123 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
         data_format='channels_first', kernel_initializer=conv_initialiser)(x1)
     x = Concatenate(axis=bn_axis, name=name + '_concat')([x, x1])
     return x
+
+
+class ResBlock(tf.keras.layers.Layer):
+
+    def __init__(self, conv_layers, filters, kernel_size, stride, activation,
+                 name):
+        super().__init__()
+
+        conv_initialiser = tf.keras.initializers.HeNormal()
+        activations = generate_activation_layers(
+            name, activation, conv_layers + 1)
+        bn_axis = 1
+
+        self.conv_layers = []
+
+        for i in range(1, conv_layers + 1):
+            ks = 1 if i < conv_layers else kernel_size
+            self.conv_layers.append(BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5,
+                name=name + '_{}_bn'.format(i)))
+            self.conv_layers.append(activations[i - 1])
+            self.conv_layers.append(Conv3D(
+                filters, ks, 1, name=name + '_{}_conv'.format(i),
+                use_bias=False,
+                data_format='channels_first', padding='same',
+                kernel_initializer=conv_initialiser
+            ))
+
+        self.final_bn = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
+        self.final_act = activations[-1]
+        self.final_conv = Conv3D(
+            4 * filters, 1, stride, name=name + '_f_conv', use_bias=False,
+            data_format='channels_first', padding='same',
+            kernel_initializer=conv_initialiser
+        )
+
+        self.shortcut_conv_1 = Conv3D(
+            4 * filters, 1, stride, name=name + '_sc_conv', use_bias=False,
+            data_format='channels_first', padding='same',
+            kernel_initializer=conv_initialiser
+        )
+        self.shortcut_bn_1 = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, name=name + '_sc_bn')
+
+        self.add = Add(name=name + '_add')
+
+    def __call__(self, inputs):
+        skip_connection = self.shortcut_conv_1(inputs)
+        skip_connection = self.shortcut_bn_1(skip_connection)
+
+        x = self.conv_layers[0](inputs)
+        for layer in self.conv_layers[1:]:
+            x = layer(x)
+
+        x = self.final_bn(x)
+        x = self.final_act(x)
+        x = self.final_conv(x)
+
+        return self.add([x, skip_connection])
+
+
+class InverseResBlock(tf.keras.layers.Layer):
+
+    def __init__(self, conv_layers, filters, kernel_size, stride, activation,
+                 name):
+        super().__init__()
+
+        conv_initialiser = tf.keras.initializers.HeNormal()
+        activations = generate_activation_layers(
+            name, activation, conv_layers + 1)
+        bn_axis = 1
+
+        self.conv_layers = []
+
+        for i in range(1, conv_layers + 1):
+            ks = 1 if i < conv_layers else kernel_size
+            self.conv_layers.append(BatchNormalization(
+                axis=bn_axis, epsilon=1.001e-5,
+                name=name + '_{}_bn'.format(i)))
+            self.conv_layers.append(activations[i - 1])
+            self.conv_layers.append(Conv3DTranspose(
+                filters, ks, 1, name=name + '_{}_conv'.format(i),
+                use_bias=False,
+                data_format='channels_first', padding='same',
+                kernel_initializer=conv_initialiser
+            ))
+
+        self.final_bn = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
+        self.final_act = activations[-1]
+        self.final_conv = Conv3DTranspose(
+            filters // 4, 1, stride, name=name + '_f_conv', use_bias=False,
+            data_format='channels_first', padding='same',
+            kernel_initializer=conv_initialiser
+        )
+
+        self.shortcut_conv_1 = Conv3DTranspose(
+            filters // 4, 1, stride, name=name + '_sc_conv', use_bias=False,
+            data_format='channels_first', padding='same',
+            kernel_initializer=conv_initialiser
+        )
+        self.shortcut_bn_1 = BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5, name=name + '_sc_bn')
+
+        self.add = Add(name=name + '_add')
+
+    def __call__(self, inputs):
+        skip_connection = self.shortcut_conv_1(inputs)
+        skip_connection = self.shortcut_bn_1(skip_connection)
+
+        x = self.conv_layers[0](inputs)
+        for layer in self.conv_layers[1:]:
+            x = layer(x)
+
+        x = self.final_bn(x)
+        x = self.final_act(x)
+        x = self.final_conv(x)
+
+        return self.add([x, skip_connection])

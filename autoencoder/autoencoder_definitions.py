@@ -18,7 +18,8 @@ from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, \
     Reshape
 
 from layers.layers import tf_transition_block, tf_inverse_transition_block, \
-    tf_dense_block, generate_activation_layers
+    tf_dense_block, generate_activation_layers, ResBlock, InverseResBlock, \
+    BatchNormalization, Conv3DTranspose
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -272,6 +273,65 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         reconstruction = Conv3DTranspose(dims[0], 3, 2, name='reconstruction',
                                          activation=final_activation,
                                          **conv_args)(x)
+
+        return input_image, encoding, reconstruction
+
+
+class ResidualAutoEncoder(AutoEncoderBase):
+    """Single layer nonconvolutional autoencoder."""
+
+    def _construct_layers(self, dims, encoding_size, hidden_activation,
+                          final_activation):
+        """Overloaded method; see base class (AutoeEncoderBase)"""
+
+        encoding_activation_layer = generate_activation_layers(
+            'encoding', hidden_activation, 1, append_name_info=False)
+
+        input_image = Input(shape=dims, dtype=tf.float32,
+                            name='input_image')
+
+        conv_blocks = 2
+
+        x = ResBlock(
+            conv_blocks, 64, 5, 2, hidden_activation, 'res_1_1')(input_image)
+        x = ResBlock(conv_blocks, 64, 3, 1, hidden_activation, 'res_1_2')(x)
+        x = ResBlock(conv_blocks, 64, 3, 1, hidden_activation, 'res_1_3')(x)
+
+        x = ResBlock(conv_blocks, 128, 5, 2, hidden_activation, 'res_2_1')(x)
+        x = ResBlock(conv_blocks, 128, 3, 1, hidden_activation, 'res_2_2')(x)
+        x = ResBlock(conv_blocks, 128, 3, 1, hidden_activation, 'res_2_3')(x)
+
+        x = ResBlock(conv_blocks, 256, 3, 2, hidden_activation, 'res_3_1')(x)
+
+        final_shape = x.shape[1:]
+
+        x = Flatten(data_format='channels_first')(x)
+
+        x = Dense(encoding_size)(x)
+        encoding = encoding_activation_layer(x)
+
+        x = Dense(np.prod(final_shape),
+                  activation=final_activation)(encoding)
+        x = Reshape(final_shape)(x)
+
+        x = InverseResBlock(
+            conv_blocks, 256, 3, 2, hidden_activation, 'inv_res_1_1')(x)
+
+        x = InverseResBlock(
+            conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_1')(x)
+        x = InverseResBlock(
+            conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_2')(x)
+        x = InverseResBlock(
+            conv_blocks, 128, 5, 2, hidden_activation, 'inv_res_2_3')(x)
+
+        x = InverseResBlock(
+            conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_1')(x)
+        x = InverseResBlock(
+            conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_2')(x)
+        x = InverseResBlock(
+            conv_blocks, 64, 5, 2, hidden_activation, 'inv_res_3_3')(x)
+
+        reconstruction = Reshape(dims, name='reconstruction')(x)
 
         return input_image, encoding, reconstruction
 

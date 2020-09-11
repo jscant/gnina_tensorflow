@@ -191,8 +191,8 @@ class LRRangeTest:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str,
-                        help='One of either "single", "multi" or "dense", '
-                             'indicating autoencoder architecture')
+                        help='One of either "single", "multi", "dense" or '
+                             '"res", indicating autoencoder architecture')
     parser.add_argument('min_lr', type=float, help='Minimum learning rate')
     parser.add_argument('max_lr', type=float, help='Maximum learning rate')
     parser.add_argument('--data_root', '-dr',
@@ -252,7 +252,8 @@ if __name__ == '__main__':
     autoencoder_class = {
         'single': autoencoder_definitions.SingleLayerAutoEncoder,
         'dense': autoencoder_definitions.DenseAutoEncoder,
-        'multi': autoencoder_definitions.MultiLayerAutoEncoder}[args.model]
+        'multi': autoencoder_definitions.MultiLayerAutoEncoder,
+        'res': autoencoder_definitions.ResidualAutoEncoder}[args.model]
     opt_args = {}
     if args.momentum > 0:
         opt_args['momentum'] = args.momentum
