@@ -122,10 +122,11 @@ class AutoEncoderBase(tf.keras.Model):
                 class is initialised explicitly.
         """
 
-        raise NotImplementedError('construct_layers must be implemented '
+        raise NotImplementedError('_construct_layers must be implemented '
                                   'in classes inherited from AutoEncoderBase. '
-                                  'AutoEncoderBase is an abstract class and '
-                                  'should not be initialised.')
+                                  'AutoEncoderBase is intended for use as an '
+                                  'abstract class and should not be explicitly'
+                                  ' instantiated.')
 
     def get_config(self):
         """Overloaded method; see base class (tf.keras.Model)."""
