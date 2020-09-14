@@ -49,7 +49,7 @@ def transition_block(x, reduction, name, activation='relu', final=False):
         output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0 = generate_activation_layers(name, activation, 1)
+    act_0 = next(generate_activation_layers(name, activation))
     bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -82,7 +82,7 @@ def inverse_transition_block(x, reduction, name, activation='relu'):
         output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0 = generate_activation_layers(name, activation, 1)
+    act_0 = next(generate_activation_layers(name, activation))
     bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -112,7 +112,7 @@ def conv_block(x, growth_rate, name, activation='relu'):
         Output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation, 1)
+    act_0 = next(generate_activation_layers(name, activation))
     bn_axis = 1
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5,
@@ -160,7 +160,7 @@ def tf_transition_block(x, reduction, name, activation='relu', final=False):
       output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation, 1)
+    act_0 = next(generate_activation_layers(name, activation))
     bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
@@ -192,7 +192,7 @@ def tf_inverse_transition_block(x, reduction, name, activation='relu'):
       output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, _ = generate_activation_layers(name, activation, 1)
+    act_0 = next(generate_activation_layers(name, activation))
     bn_axis = 1
     x = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_bn')(x)
@@ -222,12 +222,12 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
       Output tensor for the block.
     """
     conv_initialiser = tf.keras.initializers.HeNormal()
-    act_0, act_1 = generate_activation_layers(name, activation, 1)
+    activations = generate_activation_layers(name, activation)
     bn_axis = 1
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_0_bn')(
         x)
-    x1 = act_0(x1)
+    x1 = next(activations)(x1)
     x1 = layers.Conv3D(
         4 * growth_rate, 1, use_bias=False, name=name + '_1_conv',
         data_format='channels_first',
@@ -235,7 +235,7 @@ def tf_conv_block(x, growth_rate, name, activation='relu'):
     x1 = layers.BatchNormalization(
         axis=bn_axis, epsilon=1.001e-5, name=name + '_1_bn')(
         x1)
-    x1 = act_1(x1)
+    x1 = next(activations)(x1)
     x1 = layers.Conv3D(
         growth_rate, 3, padding='same', use_bias=False, name=name + '_2_conv',
         data_format='channels_first', kernel_initializer=conv_initialiser)(x1)

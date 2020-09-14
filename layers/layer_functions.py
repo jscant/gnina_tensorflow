@@ -11,8 +11,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 
 
-def generate_activation_layers(block_name, activation, n_layers,
-                               append_name_info=True):
+def generate_activation_layers(block_name, activation, append_name_info=True):
     """Generate activation layers from strings representing activation layers.
 
     Arguments:
@@ -21,30 +20,25 @@ def generate_activation_layers(block_name, activation, n_layers,
             standard keras string to AF names ('relu', 'sigmoid', etc.), or
             one of either 'prelu' (Parameterised ReLU) or 'threlu'
             (Thresholded ReLU)
-        n_layers: number of activation layers to return
         append_name_info: add activation function information to name
 
     Returns:
-        n_layers activation layers with the stipulated activation functions.
+        Generator which produces layers with names containing increasing
+        index numbers, with the specified activation function and base name.
     """
     name_template = '{0}_{{0}}_{1}'.format(block_name, activation)
-
-    outputs = []
-    for i in range(n_layers):
+    block_name_index = 0
+    while True:
         if append_name_info:
-            act_name = name_template.format(i)
+            act_name = name_template.format(block_name_index)
         else:
             act_name = block_name
+        block_name_index += 1
         if activation == 'prelu':
-            outputs.append(
-                layers.PReLU(
-                    name=act_name,
-                    alpha_initializer=tf.keras.initializers.constant(0.1)
-                ))
+            yield layers.PReLU(
+                name=act_name,
+                alpha_initializer=tf.keras.initializers.constant(0.1))
         elif activation == 'threlu':
-            outputs.append(
-                layers.ThresholdedReLU(theta=1.0, name=act_name)
-            )
+            yield layers.ThresholdedReLU(theta=1.0, name=act_name)
         else:
-            outputs.append(layers.Activation(activation, name=act_name))
-    return outputs[0] if len(outputs) == 1 else tuple(outputs)
+            yield layers.Activation(activation, name=act_name)

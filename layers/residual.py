@@ -41,8 +41,7 @@ class ResBlock(tf.keras.layers.Layer):
         super().__init__()
 
         conv_initialiser = tf.keras.initializers.HeNormal()
-        activations = generate_activation_layers(
-            name, activation, conv_layers + 1)
+        activations = generate_activation_layers(name, activation)
         bn_axis = 1
 
         self.conv_layers = []
@@ -52,7 +51,7 @@ class ResBlock(tf.keras.layers.Layer):
             self.conv_layers.append(layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5,
                 name=name + '_{}_bn'.format(i)))
-            self.conv_layers.append(activations[i - 1])
+            self.conv_layers.append(next(activations))
             self.conv_layers.append(layers.Conv3D(
                 filters, ks, 1, name=name + '_{}_conv'.format(i),
                 use_bias=False,
@@ -62,7 +61,7 @@ class ResBlock(tf.keras.layers.Layer):
 
         self.final_bn = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
-        self.final_act = activations[-1]
+        self.final_act = next(activations)
         self.final_conv = layers.Conv3D(
             4 * filters, 1, stride, name=name + '_f_conv', use_bias=False,
             data_format='channels_first', padding='same',
@@ -121,8 +120,7 @@ class InverseResBlock(tf.keras.layers.Layer):
         super().__init__()
 
         conv_initialiser = tf.keras.initializers.HeNormal()
-        activations = generate_activation_layers(
-            name, activation, conv_layers + 1)
+        activations = generate_activation_layers(name, activation)
         bn_axis = 1
 
         self.conv_layers = []
@@ -132,7 +130,7 @@ class InverseResBlock(tf.keras.layers.Layer):
             self.conv_layers.append(layers.BatchNormalization(
                 axis=bn_axis, epsilon=1.001e-5,
                 name=name + '_{}_bn'.format(i)))
-            self.conv_layers.append(activations[i - 1])
+            self.conv_layers.append(next(activations))
             self.conv_layers.append(layers.Conv3DTranspose(
                 filters, ks, 1, name=name + '_{}_conv'.format(i),
                 use_bias=False,
@@ -142,7 +140,7 @@ class InverseResBlock(tf.keras.layers.Layer):
 
         self.final_bn = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
-        self.final_act = activations[-1]
+        self.final_act = next(activations)
         self.final_conv = layers.Conv3DTranspose(
             filters // 4, 1, stride, name=name + '_f_conv', use_bias=False,
             data_format='channels_first', padding='same',
