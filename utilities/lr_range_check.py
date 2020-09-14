@@ -36,14 +36,17 @@ from utilities.gnina_functions import get_dims
 class LRRangeTest:
     """Class for performing the LR-Range test on autoencoder models."""
 
-    def __init__(self, model: tf.keras.Model, train_types: str,
+    def __init__(self, model: tf.keras.Model, ae_args:dict, train_types: str,
                  data_root: str, dimension: float, resolution: float,
                  batch_size: int, loss_fn: str, ligmap: str, recmap: str,
                  binary_mask: bool):
         """Initialise lr range test.
 
         Arguments:
-            model: autoencoder model derived from AutoEncoderBase
+            model: autoencoder model class definition derived from
+                AutoEncoderBase
+            ae_args: dict containing all arguments for the constructor of the
+                autoencoder
             train_types: types file containing training data
             data_root: path relative to which paths in train_types are taken
             dimension: length of side of cube in which ligand is situated in
@@ -56,7 +59,6 @@ class LRRangeTest:
             binary_mask: inputs are either 0 or 1, depending on if they are 0 or
                 > 0 originally
         """
-        self.model = model
         self.train_types = train_types
         self.data_root = data_root
         self.dimension = dimension
@@ -66,32 +68,15 @@ class LRRangeTest:
         self.ligmap = ligmap
         self.recmap = recmap
         self.binary_mask = binary_mask
-        self.initial_weights = model.get_weights()
+        self.model_class = model
 
-        self.metrics = {
-            'reconstruction':
-                [
-                    autoencoder_definitions.mae,
-                    autoencoder_definitions.nonzero_mae,
-                    autoencoder_definitions.zero_mae,
-                    autoencoder_definitions.zero_mse,
-                    autoencoder_definitions.nonzero_mse
-                ]
-        }
+        self.dims = ae_args['dims']
+        del ae_args['dims']
+        self.ae_kwargs = ae_args
 
-        # composite_mse is built differently to keras loss functions
-        self.compile_args = {}
-        if loss_fn != 'composite_mse':
-            self.compile_args['loss'] = loss_fn
-
-        # extract relevant optimiser hyperparameters
-        self.opt_args = {'learning_rate': 0.0}
-        momentum = getattr(self.model.optimizer, 'momentum', -1)
-        nesterov = getattr(self.model.optimizer, 'nesterov', False)
-        if momentum > 0:
-            self.opt_args['momentum'] = momentum
-        if nesterov:
-            self.opt_args['nesterov'] = True
+        m = model(self.dims, **self.ae_kwargs)
+        self.initial_weights = m.get_weights()
+        del m
 
     def run_model(self, lr: float, iterations: int):
         """Train model.
@@ -111,21 +96,16 @@ class LRRangeTest:
 
         # Let's not build multiple memory-intensive graphs
         tf.keras.backend.clear_session()
+        tf.compat.v1.reset_default_graph()
 
-        print('\nlr', lr)
-        self.opt_args['learning_rate'] = lr
-        opt = self.model.optimizer.__class__(**self.opt_args)
+        print('\nLearning rate:\n', lr)
 
-        # We have to recompile so that we can be sure that we are resetting
-        # the optimizer state (i.e. momentum)
-        self.model._losses = []
-        self.model._per_input_losses = {}
-        self.model.compile(optimizer=opt, metrics=self.metrics,
-                           **self.compile_args)
-        self.model.set_weights(self.initial_weights)
+        self.ae_kwargs['learning_rate'] = lr
+        model = self.model_class(self.dims, **self.ae_kwargs)
+        model.set_weights(self.initial_weights)
 
         losses, nonzero_mae, zero_mae = train.train(
-            self.model,
+            model,
             data_root=self.data_root,
             train_types=self.train_types,
             iterations=iterations,
@@ -139,6 +119,10 @@ class LRRangeTest:
             save_interval=-1,
             binary_mask=self.binary_mask,
             silent=False)
+
+        # More memory required due to leaky TensorFlow methods
+        del model
+
         return losses, zero_mae, nonzero_mae
 
     def plot_results(self, hist_len, save_name='lr_range_test.png'):
@@ -259,13 +243,26 @@ if __name__ == '__main__':
         opt_args['momentum'] = args.momentum
     if args.nesterov:
         opt_args['nesterov'] = True
-    m = autoencoder_class(
-        dims, encoding_size=args.encoding_size, loss=args.loss,
-        hidden_activation=args.hidden_activation,
-        final_activation=args.final_activation,
-        optimiser=args.opt, **opt_args)
+
+    # We have to construct a new model every cycle from the input args because
+    # repeated tf.keras.Model.compile cause severe memory leaks, even when
+    # the current graph is reset and the session is cleared.
+    autoencoder_args = {
+        'dims': dims,
+        'encoding_size': args.encoding_size,
+        'loss': args.loss,
+        'hidden_activation': args.hidden_activation,
+        'final_activation': args.final_activation,
+        'optimiser': args.opt
+    }
+    if args.momentum > 0:
+        autoencoder_args.update({'momentum': args.momentum})
+    if args.nesterov:
+        autoencoder_args.update({'nesterov': True})
+
     range_test = LRRangeTest(
-        m, args.train_types, data_root=args.data_root, dimension=args.dimension,
+        autoencoder_class, autoencoder_args, args.train_types,
+        data_root=args.data_root, dimension=args.dimension,
         resolution=args.resolution, batch_size=args.batch_size,
         loss_fn=args.loss, ligmap=args.ligmap, recmap=args.recmap,
         binary_mask=args.binary_mask)
