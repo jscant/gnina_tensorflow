@@ -223,8 +223,8 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         encoding_activation_layer = next(generate_activation_layers(
             'encoding', hidden_activation, append_name_info=False))
 
-        conv_activation = next(generate_activation_layers(
-            'conv', hidden_activation, append_name_info=True))
+        conv_activation = generate_activation_layers(
+            'conv', hidden_activation, append_name_info=True)
 
         input_image = layers.Input(shape=dims, dtype=tf.float32,
                                    name='input_image')
@@ -236,17 +236,17 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         bn_axis = 1
 
         x = layers.Conv3D(128, 3, 2, **conv_args)(input_image)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
         x = layers.Conv3D(256, 3, 2, **conv_args)(x)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
         x = layers.Conv3D(512, 3, 2, **conv_args)(x)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
         final_shape = x.shape[1:]
@@ -257,16 +257,16 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         encoding = encoding_activation_layer(x)
 
         x = layers.Dense(np.prod(final_shape))(x)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.Reshape(final_shape)(x)
 
         x = layers.Conv3DTranspose(256, 3, 2, **conv_args)(x)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
         x = layers.Conv3DTranspose(128, 3, 2, **conv_args)(x)
-        x = conv_activation(x)
+        x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
