@@ -53,7 +53,7 @@ class ResBlock(tf.keras.layers.Layer):
                 name=name + '_{}_bn'.format(i)))
             self.conv_layers.append(next(activations))
             self.conv_layers.append(layers.Conv3D(
-                filters, ks, 1, name=name + '_{}_conv'.format(i),
+                4 * filters, ks, 1, name=name + '_{}_conv'.format(i),
                 use_bias=False,
                 data_format='channels_first', padding='same',
                 kernel_initializer=conv_initialiser
@@ -63,13 +63,13 @@ class ResBlock(tf.keras.layers.Layer):
             axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
         self.final_act = next(activations)
         self.final_conv = layers.Conv3D(
-            4 * filters, 1, stride, name=name + '_f_conv', use_bias=False,
+            filters, 1, stride, name=name + '_f_conv', use_bias=False,
             data_format='channels_first', padding='same',
             kernel_initializer=conv_initialiser
         )
 
         self.shortcut_conv_1 = layers.Conv3D(
-            4 * filters, 1, stride, name=name + '_sc_conv', use_bias=False,
+            filters, 1, stride, name=name + '_sc_conv', use_bias=False,
             data_format='channels_first', padding='same',
             kernel_initializer=conv_initialiser
         )
@@ -132,7 +132,7 @@ class InverseResBlock(tf.keras.layers.Layer):
                 name=name + '_{}_bn'.format(i)))
             self.conv_layers.append(next(activations))
             self.conv_layers.append(layers.Conv3DTranspose(
-                filters, ks, 1, name=name + '_{}_conv'.format(i),
+                4 * filters, ks, 1, name=name + '_{}_conv'.format(i),
                 use_bias=False,
                 data_format='channels_first', padding='same',
                 kernel_initializer=conv_initialiser
@@ -142,13 +142,13 @@ class InverseResBlock(tf.keras.layers.Layer):
             axis=bn_axis, epsilon=1.001e-5, name=name + '_f_bn')
         self.final_act = next(activations)
         self.final_conv = layers.Conv3DTranspose(
-            filters // 4, 1, stride, name=name + '_f_conv', use_bias=False,
+            filters, kernel_size, stride, name=name + '_f_conv', use_bias=False,
             data_format='channels_first', padding='same',
             kernel_initializer=conv_initialiser
         )
 
         self.shortcut_conv_1 = layers.Conv3DTranspose(
-            filters // 4, 1, stride, name=name + '_sc_conv', use_bias=False,
+            filters, 1, stride, name=name + '_sc_conv', use_bias=False,
             data_format='channels_first', padding='same',
             kernel_initializer=conv_initialiser
         )

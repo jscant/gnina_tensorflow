@@ -256,7 +256,7 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         x = layers.Dense(encoding_size)(x)
         encoding = encoding_activation_layer(x)
 
-        x = layers.Dense(np.prod(final_shape))(x)
+        x = layers.Dense(np.prod(final_shape))(encoding)
         x = next(conv_activation)(x)
         x = layers.Reshape(final_shape)(x)
 
@@ -285,6 +285,13 @@ class ResidualAutoEncoder(AutoEncoderBase):
                           final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
+        conv_args = {'padding': 'same',
+                     'data_format': 'channels_first',
+                     'use_bias': False}
+
+        conv_activation = generate_activation_layers(
+            'conv', hidden_activation, append_name_info=True)
+
         encoding_activation_layer = next(generate_activation_layers(
             'encoding', hidden_activation, append_name_info=False))
 
@@ -292,23 +299,26 @@ class ResidualAutoEncoder(AutoEncoderBase):
                                    name='input_image')
 
         conv_blocks = 2
+        bn_axis = 1
+
+        x = layers.Conv3D(64, 3, 1, name='init_conv', **conv_args)(input_image)
 
         x = residual.ResBlock(
-            conv_blocks, 64, 3, 2, hidden_activation, 'res_1_1')(input_image)
-        x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
-                              'res_1_2')(x)
-        x = residual.ResBlock(conv_blocks, 64, 3, 1, hidden_activation,
-                              'res_1_3')(x)
+            conv_blocks, 32, 3, 2, hidden_activation, 'res_1_1')(x)
+        x = residual.ResBlock(
+            conv_blocks, 32, 3, 1, hidden_activation, 'res_1_2')(x)
+        x = residual.ResBlock(
+            conv_blocks, 32, 3, 1, hidden_activation, 'res_1_3')(x)
 
-        x = residual.ResBlock(conv_blocks, 128, 3, 2, hidden_activation,
-                              'res_2_1')(x)
-        x = residual.ResBlock(conv_blocks, 128, 3, 1, hidden_activation,
-                              'res_2_2')(x)
-        x = residual.ResBlock(conv_blocks, 128, 3, 1, hidden_activation,
-                              'res_2_3')(x)
+        x = residual.ResBlock(
+            conv_blocks, 64, 3, 2, hidden_activation, 'res_2_1')(x)
+        x = residual.ResBlock(
+            conv_blocks, 64, 3, 1, hidden_activation, 'res_2_2')(x)
+        x = residual.ResBlock(
+            conv_blocks, 64, 3, 1, hidden_activation, 'res_2_3')(x)
 
-        x = residual.ResBlock(conv_blocks, 256, 3, 2, hidden_activation,
-                              'res_3_1')(x)
+        x = residual.ResBlock(
+            conv_blocks, 64, 3, 2, hidden_activation, 'res_3_1')(x)
 
         final_shape = x.shape[1:]
 
@@ -317,28 +327,45 @@ class ResidualAutoEncoder(AutoEncoderBase):
         x = layers.Dense(encoding_size)(x)
         encoding = encoding_activation_layer(x)
 
-        x = layers.Dense(np.prod(final_shape),
-                         activation=final_activation)(encoding)
+        x = layers.Dense(np.prod(final_shape))(encoding)
+        x = next(conv_activation)(x)
         x = layers.Reshape(final_shape)(x)
 
-        x = residual.InverseResBlock(
-            conv_blocks, 256, 3, 2, hidden_activation, 'inv_res_1_1')(x)
+        x = layers.Conv3DTranspose(128, 3, 2, **conv_args)(x)
 
-        x = residual.InverseResBlock(
-            conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_1')(x)
-        x = residual.InverseResBlock(
-            conv_blocks, 128, 3, 1, hidden_activation, 'inv_res_2_2')(x)
-        x = residual.InverseResBlock(
-            conv_blocks, 128, 3, 2, hidden_activation, 'inv_res_2_3')(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = residual.InverseResBlock(
-            conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_1')(x)
-        x = residual.InverseResBlock(
-            conv_blocks, 64, 3, 1, hidden_activation, 'inv_res_3_2')(x)
-        x = residual.InverseResBlock(
-            conv_blocks, 64, 3, 2, hidden_activation, 'inv_res_3_3')(x)
+        x = layers.Conv3DTranspose(512, 1, 1, **conv_args)(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
 
-        reconstruction = layers.Reshape(dims, name='reconstruction')(x)
+        x = layers.Conv3DTranspose(512, 1, 1, **conv_args)(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = layers.Conv3DTranspose(256, 3, 2, **conv_args)(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = layers.Conv3DTranspose(256, 3, 1, **conv_args)(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        x = layers.Conv3DTranspose(256, 3, 1, **conv_args)(x)
+        x = next(conv_activation)(x)
+        x = layers.BatchNormalization(
+            axis=bn_axis, epsilon=1.001e-5)(x)
+
+        reconstruction = layers.Conv3DTranspose(dims[0], 3, 2,
+                                                name='reconstruction',
+                                                activation=final_activation,
+                                                **conv_args)(x)
 
         return input_image, encoding, reconstruction
 
