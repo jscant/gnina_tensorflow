@@ -36,11 +36,11 @@ from utilities.gnina_functions import get_dims
 class LRRangeTest:
     """Class for performing the LR-Range test on autoencoder models."""
 
-    def __init__(self, model: tf.keras.Model, ae_args:dict, train_types: str,
-                 data_root: str, dimension: float, resolution: float,
-                 batch_size: int, loss_fn: str, ligmap: str, recmap: str,
-                 binary_mask: bool):
-        """Initialise lr range test.
+    def __init__(self, model: autoencoder_definitions.AutoEncoderBase,
+                 ae_args: dict, train_types: str, data_root: str,
+                 dimension: float, resolution: float, batch_size: int,
+                 loss_fn: str, ligmap: str, recmap: str, binary_mask: bool):
+        """Initialise learning rate range test.
 
         Arguments:
             model: autoencoder model class definition derived from
@@ -125,7 +125,7 @@ class LRRangeTest:
 
         return losses, zero_mae, nonzero_mae
 
-    def plot_results(self, hist_len, save_name='lr_range_test.png'):
+    def plot_results(self, save_name='lr_range_test.png'):
         """Plot results of LR-range test.
 
         Arguments:
@@ -139,15 +139,18 @@ class LRRangeTest:
             ax.set_xscale('log', basex=10)
             lr_arr = []
             loss_arr = []
-            for res in self.results:
-                lr_arr.append(res[0])
-                loss_arr.append(np.mean(res[1][idx][-hist_len:]))
+            for res in self.results_string.split('\n'):
+                try:
+                    chunks = res.split()
+                    lr_arr.append(float(chunks[0]))
+                    loss_arr.append(float(chunks[idx]))
+                except IndexError:
+                    continue
             ax.plot(lr_arr, loss_arr)
             ax.set_title(titles[idx])
         fig.savefig(Path(save_name).expanduser())
 
-    def __call__(self, min_lr, max_lr, iters, hist_len=50,
-                 save_name='lr_range_test.png'):
+    def __call__(self, min_lr, max_lr, iters, save_path, hist_len=50):
         """Run LR-range test.
 
         Arguments:
@@ -155,21 +158,48 @@ class LRRangeTest:
             max_lr: highest learning rate to test
             iters: number of iterations to train autoencoder before calculating
                 mean end loss
+            save_path: directory to which graph and results are written
             hist_len: number of iterations at the end over which to take the
                 mean end loss
-            save_name: filename to which graph of results is written
         """
         ceiling = max_lr
         curr = min_lr
         lrs = []
         self.results = []
+        save_path = Path(save_path).expanduser().resolve()
+        save_path.mkdir(parents=True, exist_ok=True)
+        graph_name = save_path / 'lr_range_test.png'
+        results_text_filename = save_path / 'lr_range_test.txt'
+
+        self.results_string = ''
+        already_completed_lrs = []
+        if results_text_filename.exists():
+            with open(results_text_filename, 'r') as f:
+                self.results_string = f.read()
+                f.seek(0)
+                for line in f.readlines():
+                    already_completed_lrs.append(line.split()[0])
+
         while curr <= ceiling:
             lrs.append(curr)
             curr = np.round(curr + 10 ** (np.floor(np.log10(curr))), 10)
         for lr in lrs:
+            if str(lr) in already_completed_lrs:
+                print('Learning rate {} already completed. Skipping...'.format(
+                    lr))
+                continue
             losses = self.run_model(lr, iters)
             self.results.append((lr, losses))
-        self.plot_results(hist_len, save_name)
+            self.results_string += str((self.results[-1][0])) + ' '
+            for idx in range(3):
+                self.results_string += str(
+                    np.mean(self.results[-1][1][idx][-hist_len:])) + ' '
+            self.results_string = self.results_string[:-1] + '\n'
+            with open(results_text_filename, 'w') as f:
+                f.write(self.results_string)
+        self.results_string = self.results_string[:-1]
+
+        self.plot_results(graph_name)
 
 
 if __name__ == '__main__':
@@ -223,9 +253,9 @@ if __name__ == '__main__':
                         default=50,
                         help='How many batches at the end to take the mean '
                              'loss from')
-    parser.add_argument('--save_filename', '-s', type=str, required=False,
+    parser.add_argument('--save_path', '-s', type=str, required=False,
                         default='lr_test.png',
-                        help='Filename for results graph')
+                        help='Folder name for results')
     parser.add_argument('--binary_mask', action='store_true',
                         help='Inputs are either 0 or 1, depending on if they '
                              'are 0 or > 0 originally')
@@ -267,6 +297,6 @@ if __name__ == '__main__':
         loss_fn=args.loss, ligmap=args.ligmap, recmap=args.recmap,
         binary_mask=args.binary_mask)
     range_test(min_lr=args.min_lr, max_lr=args.max_lr, iters=args.iterations,
-               hist_len=args.hist_len, save_name=args.save_filename)
+               hist_len=args.hist_len, save_path=args.save_path)
     print('Results saved to {}'.format(
-        Path(args.save_filename).expanduser().resolve()))
+        Path(args.save_path).expanduser().resolve()))
