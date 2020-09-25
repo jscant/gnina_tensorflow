@@ -64,7 +64,7 @@ def get_dims(dimension, resolution, ligmap, recmap):
         Tuple containing dimensions of gnina input
     """
     channels = 0
-    for fname in ligmap, recmap:
+    for fname in [ligmap, recmap]:
         if fname is None:
             c = 14
         else:
@@ -108,7 +108,6 @@ def print_with_overwrite(s):
     console_width = shutil.get_terminal_size((0, 20)).columns
     for idx in range(n_lines):
         lines[idx] += ' ' * max(0, console_width - len(lines[idx]))
-    lines = '\n'.join(lines)
     print((ERASE + UP_ONE) * (n_lines - 1) + s, end='\r', flush=True)
 
 
@@ -147,6 +146,9 @@ def process_batch(model, example_provider, gmaker, input_tensor,
         labels_tensor: molgrid.MGrid1f object, for storing true labels. If
             labels_tensor is None and train is False, , return value will be
             a vector of predictions.
+        train: are we training (performing backpropagation)
+        autoencoder: trained autoencoder model to feed inputs through; the
+            reconstruction is used as the input to the main model
 
     Returns:
         if labels_tensor is None and train is False: numpy.ndarray of

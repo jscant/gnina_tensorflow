@@ -4,7 +4,7 @@ from pathlib import Path
 import tensorflow as tf
 
 from autoencoder.autoencoder_definitions import nonzero_mae, composite_mse, \
-    zero_mae, nonzero_mse, zero_mse
+    zero_mae, nonzero_mse, zero_mse, trimmed_nonzero_mae, trimmed_zero_mae
 
 
 def str_to_type(arg):
@@ -81,8 +81,9 @@ class LoadConfigTest(argparse.Action):
             namespace.load_model = values
             return
 
-        setattr(namespace, 'use_cpu', False)
-        setattr(namespace, 'binary_mask', False)
+        bin_opts = ['use_cpu', 'binary_mask', 'nesterov']
+        for bin_opt in bin_opts:
+            setattr(namespace, bin_opt, False)
         with open(config, 'r') as f:
             for line in f.readlines():
                 chunks = line.split()
@@ -96,7 +97,7 @@ class LoadConfigTest(argparse.Action):
                     setattr(namespace, chunks[0], int(chunks[1]))
                 elif len(chunks) == 1 or chunks[1] == 'True':
                     # store_true args present a problem, loaded manually
-                    if chunks[0] in ['binary_mask', 'use_cpu']:
+                    if chunks[0] in bin_opts:
                         setattr(namespace, chunks[0], True)
 
         # args.load_model is always None if we do not do this, even when
@@ -122,7 +123,9 @@ def pickup(path):
             'nonzero_mse': nonzero_mse,
             'composite_mse': composite_mse,
             'nonzero_mae': nonzero_mae,
-            'zero_mae': zero_mae
+            'zero_mae': zero_mae,
+            'trimmed_nonzero_mae': trimmed_nonzero_mae,
+            'trimmed_zero_mae': trimmed_zero_mae,
         }
     )
 
@@ -204,6 +207,10 @@ def parse_command_line_args(test_or_train='train'):
         )
         parser.add_argument(
             '--momentum', type=float, required=False, default=0.0)
+        parser.add_argument(
+            '--nesterov', action='store_true',
+            help='Use nesterov momentum (RMSProp and SGD(W) only)'
+        )
         parser.add_argument(
             '--loss', type=str, required=False, default='mse')
         parser.add_argument(

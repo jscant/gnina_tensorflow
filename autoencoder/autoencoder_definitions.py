@@ -77,8 +77,9 @@ class AutoEncoderBase(tf.keras.Model):
             outputs=[self.reconstruction, self.encoding]
         )
 
-        metrics = {'reconstruction': [mae, nonzero_mae, zero_mae, zero_mse,
-                                      nonzero_mse]}
+        metrics = {
+            'reconstruction': [mae, trimmed_nonzero_mae, trimmed_zero_mae,
+                               zero_mse, nonzero_mse]}
 
         if loss == 'composite_mse':
             self.add_loss(composite_mse(
@@ -428,8 +429,8 @@ def composite_mse(target, reconstruction, ratio):
     """
     frac = tf.divide(ratio, 1. + ratio)
     return tf.math.add(
-        tf.math.multiply(frac, nonzero_mse(target, reconstruction)),
-        tf.math.multiply(1. - frac, zero_mse(target, reconstruction)))
+        tf.math.multiply(frac, trimmed_nonzero_mse(target, reconstruction)),
+        tf.math.multiply(1. - frac, trimmed_zero_mse(target, reconstruction)))
 
 
 def mae(target, reconstruction):
@@ -483,3 +484,93 @@ def nonzero_mae(target, reconstruction):
     masked_diff = (target - reconstruction) * mask
     abs_diff = tf.abs(masked_diff)
     return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
+
+
+def trimmed_nonzero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are not zero.
+
+    Inputs less than two units from the edge of the bounding cube are discarded.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is not zero.
+        This can be NaN if there are no nonzero inputs.
+    """
+    _, _, x, y, z = target.shape
+    begin = [0, 0, 2, 2, 2]
+    end = [-1, -1, x - 2, y - 2, z - 2]
+    trimmed_target = tf.slice(target, begin, end)
+    trimmed_reconstruction = tf.slice(reconstruction, begin, end)
+    return nonzero_mae(trimmed_target, trimmed_reconstruction)
+
+
+def trimmed_zero_mae(target, reconstruction):
+    """Mean absolute error loss function target values are zero.
+
+    Inputs less than two units from the edge of the bounding cube are discarded.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is equal to zero.
+        This can be NaN if there are no inputs equal to zero.
+    """
+    _, _, x, y, z = target.shape
+    begin = [0, 0, 2, 2, 2]
+    end = [-1, -1, x - 2, y - 2, z - 2]
+    trimmed_target = tf.slice(target, begin, end)
+    trimmed_reconstruction = tf.slice(reconstruction, begin, end)
+    return zero_mae(trimmed_target, trimmed_reconstruction)
+
+
+def trimmed_nonzero_mse(target, reconstruction):
+    """Mean squared error for non-zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are not equal to zero. Inputs less than two units from the edge of the
+    bounding cube are discarded.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all non-zero entries in the target
+    """
+    _, _, x, y, z = target.shape
+    begin = [0, 0, 2, 2, 2]
+    end = [-1, -1, x - 2, y - 2, z - 2]
+    trimmed_target = tf.slice(target, begin, end)
+    trimmed_reconstruction = tf.slice(reconstruction, begin, end)
+    return nonzero_mse(trimmed_target, trimmed_reconstruction)
+
+
+def trimmed_zero_mse(target, reconstruction):
+    """Mean squared error for non-zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are not equal to zero. Inputs less than two units from the edge of the
+    bounding cube are discarded.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all non-zero entries in the target
+    """
+    _, _, x, y, z = target.shape
+    begin = [0, 0, 2, 2, 2]
+    end = [-1, -1, x - 2, y - 2, z - 2]
+    trimmed_target = tf.slice(target, begin, end)
+    trimmed_reconstruction = tf.slice(reconstruction, begin, end)
+    return zero_mse(trimmed_target, trimmed_reconstruction)

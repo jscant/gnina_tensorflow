@@ -147,8 +147,8 @@ def train(model, data_root, train_types, iterations, batch_size,
             {'reconstruction': input_tensor_numpy},
             return_dict=True)
 
-        zero_mae = loss['reconstruction_zero_mae']
-        nonzero_mae = loss['reconstruction_nonzero_mae']
+        zero_mae = loss['reconstruction_trimmed_zero_mae']
+        nonzero_mae = loss['reconstruction_trimmed_nonzero_mae']
         if isnan(nonzero_mae):
             nonzero_mae = nonzero_losses[-1] if len(nonzero_losses) else 1.
 
