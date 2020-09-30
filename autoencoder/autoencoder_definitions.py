@@ -69,8 +69,13 @@ class AutoEncoderBase(tf.keras.Model):
         # Composite mse requires an extra weight input
         inputs = [self.input_image]
         if loss == 'composite_mse':
-            self.frac = layers.Input(shape=(1,), dtype=tf.float32, name='frac')
+            self.frac = layers.Input(
+                shape=(1,), dtype=tf.float32, name='frac')
             inputs.append(self.frac)
+        elif loss == 'distance_mse':
+            self.distances = layers.Input(
+                shape=dims, dtype=tf.float32, name='distances')
+            inputs.append(self.distances)
 
         super().__init__(
             inputs=inputs,
@@ -84,6 +89,13 @@ class AutoEncoderBase(tf.keras.Model):
         if loss == 'composite_mse':
             self.add_loss(composite_mse(
                 self.input_image, self.reconstruction, self.frac))
+            self.compile(
+                optimizer=optimiser(**opt_args),
+                metrics=metrics
+            )
+        elif loss == 'distance_mse':
+            self.add_loss(proximity_mse(
+                self.input_image, self.reconstruction, self.distances))
             self.compile(
                 optimizer=optimiser(**opt_args),
                 metrics=metrics
@@ -431,6 +443,37 @@ def composite_mse(target, reconstruction, ratio):
     return tf.math.add(
         tf.math.multiply(frac, trimmed_nonzero_mse(target, reconstruction)),
         tf.math.multiply(1. - frac, trimmed_zero_mse(target, reconstruction)))
+
+
+def proximity_mse(target, reconstruction, distances):
+    """Weighted mean squared error by proximity to ligand density.
+
+    Finds the MSE between the target and reconstruction, weighted by the inverse
+    of the distance between each point on the grid and the nearest point which
+    contains a non-zero input in an ligand channel. This distances grid can be
+    found using calcul_distances.calculate_distances.
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        distances: grid of the same dimension as target containing distances
+            between each point and the nearest point with ligand density. This
+            should be constructed by stacking n_channels copies of the 3D output
+            of calculate_distances.calculate_distances on a new axis at position
+            1.
+
+    Returns:
+        4D tensor of the same shape as the input tensors. The mean squared error
+        at each point is weighted by the distances according to the following
+        expression in order to avoid dividing by zero errors:
+
+            weighted_squared_error = squared_error * (1 / (distance**2 + 0.5)
+    """
+    distances = tf.math.sqrt(distances + 2.0)
+    proximities = 2.0 / distances
+    squared_difference = tf.math.squared_difference(target, reconstruction)
+    masked_sq_difference = tf.math.multiply(proximities, squared_difference)
+    return masked_sq_difference
 
 
 def mae(target, reconstruction):

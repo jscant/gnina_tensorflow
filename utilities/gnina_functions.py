@@ -10,6 +10,7 @@ import shutil
 import time
 from pathlib import Path
 
+import numpy as np
 import tensorflow as tf
 
 
@@ -191,3 +192,62 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     else:  # Return labels, predictions
         return (labels_tensor.tonumpy(),
                 model.predict_on_batch(gnina_input))
+
+
+def _calculate_ligand_distances(rec_channels, input_tensor, point_dist):
+    """Calculate the minimum distance from any ligand electron density.
+
+    For each grid point in a gnina input, this function will find the minimum
+    distance to any part of the ligand input with a non-zero density.
+
+    Note: the optimised C++ version of this function is provided along with
+    python bindings under cpp/src/calculate_distances, in a function named
+    calculate_distances in the calculate_distances module which comes packaged
+    with gnina_tensorflow. It is about 70 times faster than this function when
+    used on a 16 x 24 x 24 x 24 input, takes the same arguments and returns
+    the same array. This python version is included for testing purposes.
+
+    Arguments:
+        rec_channels: the number of receptor channels in the gnina input
+        input_tensor: a 4D numpy array with dimensions (channels, x, y, z)
+        point_dist: the input grid resolution (Angstroms)
+
+    Returns:
+        3D numpy array of dimension (x, y, z) containing the minimum distance
+        of each point to some ligand density.
+    """
+    lig_tensor = input_tensor[rec_channels:, :, :, :]
+    lig_tensor = np.sum(lig_tensor, axis=0)
+    lig_tensor[np.where(lig_tensor > 0)] = 1.0
+    result = np.zeros_like(lig_tensor)
+    x, y, z = result.shape
+
+    for i in range(x):
+        for j in range(y):
+            for k in range(z):
+                coords = np.array([i, j, k])
+                cube_size = 3
+                min_dist = np.inf
+                while cube_size <= 2 * x + 1:
+                    radius = cube_size // 2 + 1
+                    imin = max(0, i - radius)
+                    imax = min(x, i + radius)
+                    jmin = max(0, j - radius)
+                    jmax = min(y, j + radius)
+                    kmin = max(0, k - radius)
+                    kmax = min(z, k + radius)
+                    origin = np.array([imin, jmin, kmin])
+
+                    mask_cube = lig_tensor[imin:imax, jmin:jmax, kmin:kmax]
+                    rel_i, rel_j, rel_k = np.where(mask_cube > 0)
+                    if not len(rel_i):
+                        cube_size += 2
+                        continue
+                    relative_coords = np.vstack([rel_i, rel_j, rel_k])
+                    for idx in range(len(rel_i)):
+                        abs_coords = relative_coords[:, idx] + origin
+                        dist = np.linalg.norm(abs_coords - coords, 2)
+                        min_dist = min(dist, min_dist)
+                    result[i, j, k] = min_dist
+                    break
+    return result * point_dist

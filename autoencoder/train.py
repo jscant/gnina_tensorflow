@@ -9,6 +9,7 @@ import time
 from math import isnan
 from pathlib import Path
 
+import calculate_distances as cd
 import molgrid
 import numpy as np
 import tensorflow as tf
@@ -71,11 +72,14 @@ def train(model, data_root, train_types, iterations, batch_size,
         e = molgrid.ExampleProvider(
             **example_provider_kwargs
         )
+        rec_channels = 14
     else:
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e = molgrid.ExampleProvider(
             rec_typer, lig_typer, **example_provider_kwargs)
+        with open(recmap, 'r') as f:
+            rec_channels = len([line for line in f.readlines() if len(line)])
     e.populate(str(Path(train_types).expanduser()))
 
     # noinspection PyArgumentList
@@ -121,26 +125,35 @@ def train(model, data_root, train_types, iterations, batch_size,
                 previous_checkpoint = checkpoint_path
 
         # Use learning rate scheduler to find learning rate
-
         if isinstance(model.learning_rate_schedule,
                       tf.keras.optimizers.schedules.LearningRateSchedule):
             lr = model.learning_rate_schedule(iteration)
             K.set_value(model.optimizer.learning_rate, lr)
-        else:
-            lr = K.get_value(model.optimizer.learning_rate)
 
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
         input_tensor_numpy = np.minimum(input_tensor.tonumpy(), 1.0)
 
-        mean_nonzero = np.mean(
-            input_tensor_numpy[np.where(input_tensor_numpy > 0)])
-
         x_inputs = {'input_image': input_tensor_numpy}
+
         if loss_fn == 'composite_mse':
             x_inputs['frac'] = tf.constant(
                 loss_ratio, shape=(batch_size,))
+
+        if loss_fn == 'distance_mse':
+            spatial_information = np.zeros(
+                (batch_size, *dims[1:]), dtype='float32')
+            for i in range(batch_size):
+                fortran_tensor = np.asfortranarray(
+                    input_tensor_numpy[i, :, :, :, :])
+                spatial_information[i, :, :, :] = cd.calculate_distances(
+                    rec_channels, fortran_tensor, resolution)
+            distances = np.stack([spatial_information] * dims[0], axis=1)
+            x_inputs['distances'] = distances
+
+        mean_nonzero = np.mean(
+            input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
         loss = model.train_on_batch(
             x_inputs,
