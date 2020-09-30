@@ -15,6 +15,7 @@ import re
 import subprocess
 import sys
 from distutils.version import LooseVersion
+from pathlib import Path
 
 from setuptools import Extension, setup, find_packages
 from setuptools.command.build_ext import build_ext
@@ -65,9 +66,9 @@ class CMakeBuild(build_ext):
             build_args += ['--', '-j2']
 
         env = os.environ.copy()
-        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\" -O3 -Wall -Wextra'.format(
+        env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\" -O3 -Wall'.format(
             env.get('CXXFLAGS', ''),
-            self.distribution.get_version())
+            self.distribution.get_version())#
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
@@ -84,11 +85,9 @@ setup(
     author_email='jack.scantlebury@gmail.com',
     description='Tensorflow implementation of gnina and other tools',
     long_description='',
-    packages=find_packages(include=['autoencoder', 'classifier', 'layers',
-                                    'utilities', 'test', 'layers',
-                                    'cpp/src/calculate_distances'],
-                           exclude=['data*', '*.gninatypes']),
-    ext_modules=[CMakeExtension('cpp')],
+    packages=['autoencoder', 'calculate_distances', 'classifier'],
+    package_dir={'calculate_distances': './cpp/src/calculate_distances'},
+    ext_modules=[CMakeExtension('calculate_distances')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
 )
