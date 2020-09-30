@@ -1,6 +1,10 @@
+// @author: scantleb
+// @created: 29/09/2020
+// @brief: PyBind11 interface functions.
 //
-// Created by scantleb-admin on 28/09/2020.
-//
+// calculate_distance_wrapper is the interface between data stored in python
+// numpy arrays and the calculate_distance function, which takes and returns
+// Eigen::Tensor objects.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
@@ -24,19 +28,6 @@ py::array_t<T> calculate_distance_wrapper(
 
     Eigen::Tensor<T, 3> output_tensor = calculate_ligand_distances(
             rec_channels, input_eigen_tensor, point_dist);
-
-    /*
-    std::string line;
-    for (auto i = 0; i < shape[1]; ++i) {
-        for (auto j = 0; j < shape[2]; j++) {
-            for (auto k = 0; k < shape[3]; k++) {
-                line += std::to_string(output_tensor(i, j, k)) + " ";
-            }
-            py::print(line);
-            line = "";
-        }
-        py::print("--------\n");
-    }*/
 
     std::vector<py::ssize_t> stride(
             {static_cast<long>(sizeof(T)),
