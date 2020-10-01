@@ -12,12 +12,14 @@ https://github.com/pybind/cmake_example.
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 from distutils.version import LooseVersion
 from pathlib import Path
 
-from setuptools import Extension, setup, find_packages
+from distutils.core import setup
+from setuptools import Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 
@@ -46,10 +48,15 @@ class CMakeBuild(build_ext):
             self.build_extension(ext)
 
     def build_extension(self, ext):
+        #extdir = Path('cpp/build').resolve().absolute() / Path(ext.name)
+        #extdir.mkdir(parents=True, exist_ok=True)
+        #extdir = str(extdir)
+        #print(extdir)
         extdir = os.path.abspath(
-            os.path.dirname(self.get_ext_fullpath(ext.name)))
+            os.path.dirname(self.get_ext_fullpath(Path(ext.name).name)))
         cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,
-                      '-DPYTHON_EXECUTABLE=' + sys.executable]
+                      '-DPYTHON_EXECUTABLE=' + sys.executable,
+                      '-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=' + extdir]
 
         cfg = 'Debug' if self.debug else 'Release'
         build_args = ['--config', cfg]
@@ -68,15 +75,22 @@ class CMakeBuild(build_ext):
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\" -O3 -Wall'.format(
             env.get('CXXFLAGS', ''),
-            self.distribution.get_version())#
+            self.distribution.get_version())
+        print('build_temp:', self.build_temp)
+        print('extdir:', extdir)
+        print('python_exe:', sys.executable)
+        print('cfg:', cfg)
+        print(cmake_args)
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
         subprocess.check_call(['cmake', ext.sourcedir] + cmake_args,
                               cwd=self.build_temp, env=env)
         subprocess.check_call(['cmake', '--build', '.'] + build_args,
                               cwd=self.build_temp)
+        so_fname = next((Path(self.build_temp) / 'cpp' / Path(ext.name).name).glob('*.so'))
+        print(so_fname)
+        shutil.copy(so_fname, Path(extdir))
         print()  # Add an empty line for cleaner output
-
 
 setup(
     name='gnina_tensorflow',
@@ -85,9 +99,12 @@ setup(
     author_email='jack.scantlebury@gmail.com',
     description='Tensorflow implementation of gnina and other tools',
     long_description='',
-    packages=['autoencoder', 'calculate_distances', 'classifier'],
-    package_dir={'calculate_distances': './cpp/src/calculate_distances'},
-    ext_modules=[CMakeExtension('calculate_distances')],
+    packages=['autoencoder', 'classifier', 'gnina_tensorflow_cpp'],
+    package_dir={'gnina_tensorflow_cpp':
+        'cpp/src/gnina_tensorflow_cpp'},
+    package_data={'gnina_tensorflow_cpp':
+        ['*.so','__init__.py']},
+    ext_modules=[CMakeExtension('cpp/src/gnina_tensorflow_cpp')],
     cmdclass=dict(build_ext=CMakeBuild),
     zip_safe=False,
 )
