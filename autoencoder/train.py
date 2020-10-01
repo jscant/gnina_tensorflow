@@ -16,7 +16,7 @@ import tensorflow as tf
 from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
-    print_with_overwrite
+    print_with_overwrite, _calculate_ligand_distances
 
 
 def train(model, data_root, train_types, iterations, batch_size,
@@ -190,10 +190,12 @@ def train(model, data_root, train_types, iterations, batch_size,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f} | Learning rate: {8:.3e}')
+                              '| Zero MAE: {5:0.4f} | Close MAE: {9:0.4f} | '
+                              'Learning rate: {8:.3e}')
             console_output = console_output.format(
                 iteration, iterations, loss_fn, loss['loss'], nonzero_mae,
-                zero_mae, format_time(time_elapsed), formatted_eta, lr
+                zero_mae, format_time(time_elapsed), formatted_eta, lr,
+                loss['close_mae']
             )
             print_with_overwrite(console_output)
 

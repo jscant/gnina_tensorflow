@@ -96,6 +96,8 @@ class AutoEncoderBase(tf.keras.Model):
         elif loss == 'distance_mse':
             self.add_loss(proximity_mse(
                 self.input_image, self.reconstruction, self.distances))
+            self.add_metric(close_mae(self.input_image, self.reconstruction,
+                                      self.distances, 6.0), name='close_mae')
             self.compile(
                 optimizer=optimiser(**opt_args),
                 metrics=metrics
@@ -398,7 +400,7 @@ def nonzero_mse(target, reconstruction):
     """
     mask = tf.cast(tf.not_equal(target, 0), tf.float32)
     masked_difference = (target - reconstruction) * mask
-    return tf.reduce_mean(tf.square(masked_difference))
+    return tf.square(masked_difference)
 
 
 def zero_mse(target, reconstruction):
@@ -416,7 +418,7 @@ def zero_mse(target, reconstruction):
     """
     mask = tf.cast(tf.equal(target, 0), tf.float32)
     masked_difference = (target - reconstruction) * mask
-    return tf.reduce_mean(tf.square(masked_difference))
+    return tf.square(masked_difference)
 
 
 def composite_mse(target, reconstruction, ratio):
@@ -476,6 +478,34 @@ def proximity_mse(target, reconstruction, distances):
     return masked_sq_difference
 
 
+def close_mae(target, reconstruction, distances, threshold):
+    """Mean average error thresholded by proximity to ligand density.
+
+    Finds the MAE for inputs which are closer than a threshold distance from
+    any ligand channel with a value greater than zero. This should only be used
+    as a metric (not a loss function).
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        distances: grid of the same dimension as target containing distances
+            between each point and the nearest point with ligand density. This
+            should be constructed by stacking n_channels copies of the 3D output
+            of gnina_tensorflow_cpp.calculate_distances on a new axis at
+            position 1.
+        threshold: threshold distance (Angstroms)
+
+    Returns:
+        Mean average error for values within <threshold> angstroms of a nonzero
+        ligand channel input.
+    """
+    mask = tf.cast(tf.math.greater(distances, float(threshold)), tf.float32)
+    mask_sum = tf.reduce_sum(mask)
+    difference = tf.math.abs(target - reconstruction)
+    masked_difference = tf.multiply(mask, difference)
+    return tf.reduce_sum(masked_difference) / mask_sum
+
+
 def mae(target, reconstruction):
     """Mean absolute error loss function.
 
@@ -504,9 +534,10 @@ def zero_mae(target, reconstruction):
         This can be NaN if there are no inputs equal to zero.
     """
     mask = tf.cast(tf.equal(target, 0), tf.float32)
-    masked_diff = (target - reconstruction) * mask
-    abs_diff = tf.abs(masked_diff)
-    return tf.divide(tf.reduce_sum(abs_diff), tf.reduce_sum(mask))
+    mask_sum = tf.reduce_sum(mask)
+    abs_diff = tf.abs(target - reconstruction)
+    masked_abs_diff = tf.math.multiply(abs_diff, mask)
+    return tf.reduce_sum(masked_abs_diff) / mask_sum
 
 
 def nonzero_mae(target, reconstruction):
@@ -522,11 +553,11 @@ def nonzero_mae(target, reconstruction):
         the target is not zero.
         This can be NaN if there are no nonzero inputs.
     """
-    mask = 1 - tf.cast(tf.equal(target, 0), tf.float32)
+    mask = 1.0 - tf.cast(tf.equal(target, 0), tf.float32)
     mask_sum = tf.reduce_sum(mask)
-    masked_diff = (target - reconstruction) * mask
-    abs_diff = tf.abs(masked_diff)
-    return tf.divide(tf.reduce_sum(abs_diff), mask_sum)
+    abs_diff = tf.abs(target - reconstruction)
+    masked_abs_diff = tf.math.multiply(abs_diff, mask)
+    return tf.reduce_sum(masked_abs_diff) / mask_sum
 
 
 def trimmed_nonzero_mae(target, reconstruction):
@@ -545,8 +576,8 @@ def trimmed_nonzero_mae(target, reconstruction):
         This can be NaN if there are no nonzero inputs.
     """
     _, _, x, y, z = target.shape
-    begin = [0, 0, 2, 2, 2]
-    end = [-1, -1, x - 2, y - 2, z - 2]
+    begin = [0, 0, 3, 3, 3]
+    end = [-1, -1, x - 3, y - 3, z - 3]
     trimmed_target = tf.slice(target, begin, end)
     trimmed_reconstruction = tf.slice(reconstruction, begin, end)
     return nonzero_mae(trimmed_target, trimmed_reconstruction)
@@ -568,8 +599,8 @@ def trimmed_zero_mae(target, reconstruction):
         This can be NaN if there are no inputs equal to zero.
     """
     _, _, x, y, z = target.shape
-    begin = [0, 0, 2, 2, 2]
-    end = [-1, -1, x - 2, y - 2, z - 2]
+    begin = [0, 0, 3, 3, 3]
+    end = [-1, -1, x - 3, y - 3, z - 3]
     trimmed_target = tf.slice(target, begin, end)
     trimmed_reconstruction = tf.slice(reconstruction, begin, end)
     return zero_mae(trimmed_target, trimmed_reconstruction)
