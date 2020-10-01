@@ -16,7 +16,7 @@ from gnina_tensorflow_cpp import calculate_distances as cd
 from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
-    print_with_overwrite
+    print_with_overwrite, _calculate_ligand_distances, Timer
 
 
 def train(model, data_root, train_types, iterations, batch_size,
@@ -143,14 +143,13 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         if loss_fn == 'distance_mse':
             spatial_information = np.zeros(
-                (batch_size, *dims[1:]), dtype='float32')
+                (batch_size, *dims), dtype='float32')
             for i in range(batch_size):
                 fortran_tensor = np.asfortranarray(
                     input_tensor_numpy[i, :, :, :, :])
-                spatial_information[i, :, :, :] = cd(
+                spatial_information[i, :, :, :, :] = cd(
                     rec_channels, fortran_tensor, resolution)
-            distances = np.stack([spatial_information] * dims[0], axis=1)
-            x_inputs['distances'] = distances
+            x_inputs['distances'] = spatial_information
 
         mean_nonzero = np.mean(
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
