@@ -216,11 +216,12 @@ def _calculate_ligand_distances(rec_channels, input_tensor, point_dist):
         3D numpy array of dimension (x, y, z) containing the minimum distance
         of each point to some ligand density.
     """
+    output_shape = input_tensor.shape
     lig_tensor = input_tensor[rec_channels:, :, :, :]
     lig_tensor = np.sum(lig_tensor, axis=0)
     lig_tensor[np.where(lig_tensor > 0)] = 1.0
-    result = np.zeros_like(lig_tensor)
-    x, y, z = result.shape
+    result = np.zeros(output_shape, dtype='float32')
+    x, y, z = output_shape[1:]
 
     for i in range(x):
         for j in range(y):
@@ -248,6 +249,6 @@ def _calculate_ligand_distances(rec_channels, input_tensor, point_dist):
                         abs_coords = relative_coords[:, idx] + origin
                         dist = np.linalg.norm(abs_coords - coords, 2)
                         min_dist = min(dist, min_dist)
-                    result[i, j, k] = min_dist
+                    result[:, i, j, k] = min_dist
                     break
     return result * point_dist
