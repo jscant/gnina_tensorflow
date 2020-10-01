@@ -9,14 +9,14 @@ import time
 from math import isnan
 from pathlib import Path
 
-import calculate_distances as cd
 import molgrid
 import numpy as np
 import tensorflow as tf
+from gnina_tensorflow_cpp import calculate_distances as cd
 from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
-    print_with_overwrite, _calculate_ligand_distances
+    print_with_overwrite
 
 
 def train(model, data_root, train_types, iterations, batch_size,
@@ -147,7 +147,7 @@ def train(model, data_root, train_types, iterations, batch_size,
             for i in range(batch_size):
                 fortran_tensor = np.asfortranarray(
                     input_tensor_numpy[i, :, :, :, :])
-                spatial_information[i, :, :, :] = cd.calculate_distances(
+                spatial_information[i, :, :, :] = cd(
                     rec_channels, fortran_tensor, resolution)
             distances = np.stack([spatial_information] * dims[0], axis=1)
             x_inputs['distances'] = distances
