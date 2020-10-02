@@ -151,7 +151,7 @@ def main():
 
     ae.summary()
 
-    if args.loss != 'composite_mse':
+    if args.loss not in ['composite_mse', 'distance_mse']:
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 

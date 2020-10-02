@@ -48,10 +48,6 @@ class CMakeBuild(build_ext):
             self.build_extension(ext)
 
     def build_extension(self, ext):
-        #extdir = Path('cpp/build').resolve().absolute() / Path(ext.name)
-        #extdir.mkdir(parents=True, exist_ok=True)
-        #extdir = str(extdir)
-        #print(extdir)
         extdir = os.path.abspath(
             os.path.dirname(self.get_ext_fullpath(Path(ext.name).name)))
         cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + extdir,

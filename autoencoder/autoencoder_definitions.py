@@ -73,7 +73,7 @@ class AutoEncoderBase(tf.keras.Model):
             self.frac = layers.Input(
                 shape=(1,), dtype=tf.float32, name='frac')
             inputs.append(self.frac)
-        elif loss == 'distance_mse' or metric_distance_threshold > 0:
+        if loss == 'distance_mse' or metric_distance_threshold > 0:
             self.distances = layers.Input(
                 shape=dims, dtype=tf.float32, name='distances')
             inputs.append(self.distances)
