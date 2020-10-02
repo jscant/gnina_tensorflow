@@ -20,18 +20,15 @@ py::array_t<T> calculate_distance_wrapper(
     py::buffer_info buffer_info = input_tensor.request();
 
     T *data = static_cast<T *>(buffer_info.ptr);
-    std::vector<py::ssize_t> input_shape = buffer_info.shape;
 
+    std::vector<py::ssize_t> input_shape = buffer_info.shape;
     std::vector<py::ssize_t> output_shape = input_shape;
 
-    Eigen::TensorMap<Eigen::Tensor<T, 4>> input_eigen_tensor(
-            data,
-            input_shape[0],
-            input_shape[1],
-            input_shape[2],
-            input_shape[3]);
+    Eigen::TensorMap<Eigen::Tensor<T, 5>> input_eigen_tensor(
+            data, input_shape[0], input_shape[1], input_shape[2],
+            input_shape[3], input_shape[4]);
 
-    Eigen::Tensor<T, 4> output_tensor = calculate_ligand_distances(
+    Eigen::Tensor<T, 5> output_tensor = calculate_ligand_distances(
             rec_channels, input_eigen_tensor, point_dist);
 
     std::vector<py::ssize_t> stride(
@@ -39,7 +36,9 @@ py::array_t<T> calculate_distance_wrapper(
              static_cast<long>(output_shape[0] * sizeof(T)),
              static_cast<long>(output_shape[0] * output_shape[1] * sizeof(T)),
              static_cast<long>(output_shape[0] * output_shape[1] *
-                               output_shape[2] * sizeof(T))});
+                               output_shape[2] * sizeof(T)),
+             static_cast<long>(output_shape[0] * output_shape[1] *
+                               output_shape[2] * output_shape[3] * sizeof(T))});
 
     return py::array_t<T>(output_shape, stride, output_tensor.data());
 }

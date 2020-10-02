@@ -133,7 +133,8 @@ def train(model, data_root, train_types, iterations, batch_size,
         batch = e.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=False)
 
-        input_tensor_numpy = np.minimum(input_tensor.tonumpy(), 1.0)
+        input_tensor_numpy = np.minimum(
+            input_tensor.tonumpy(), 1.0).astype('float32')
 
         x_inputs = {'input_image': input_tensor_numpy}
 
@@ -142,13 +143,8 @@ def train(model, data_root, train_types, iterations, batch_size,
                 loss_ratio, shape=(batch_size,))
 
         if loss_fn == 'distance_mse':
-            spatial_information = np.zeros(
-                (batch_size, *dims), dtype='float32')
-            for i in range(batch_size):
-                fortran_tensor = np.asfortranarray(
-                    input_tensor_numpy[i, :, :, :, :])
-                spatial_information[i, :, :, :, :] = cd(
-                    rec_channels, fortran_tensor, resolution)
+            spatial_information = cd(
+                rec_channels, np.asfortranarray(input_tensor_numpy), resolution)
             x_inputs['distances'] = spatial_information
 
         mean_nonzero = np.mean(

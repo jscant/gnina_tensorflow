@@ -17,7 +17,7 @@ float get_distance(const std::vector<T> &v1, const std::vector<T> &v2) {
 
 // Return a 3D Eigen::Tensor of floats, with each entry denoting the minimum L2 distance from that point to any part of
 // the input where there is a non-zero input in a ligand channel.
-Eigen::Tensor<float, 4> calculate_ligand_distances(
+Eigen::Tensor<float, 5> calculate_ligand_distances(
         int rec_channels,
-        Eigen::Tensor<float, 4> input_tensor,
+        Eigen::Tensor<float, 5> input_tensor,
         float point_dis);
