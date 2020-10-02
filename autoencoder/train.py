@@ -105,7 +105,7 @@ def train(model, data_root, train_types, iterations, batch_size,
     # Are we loading previous loss history or starting afresh?
     if loss_log is None:
         loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean ' \
-                   'close_mae close_zero_mae close_nonzero_mae learning_rate\n'
+                   'close_mae close_nonzero_mae close_zero_mae learning_rate\n'
 
     if not silent and save_path is not None:
         save_path = Path(save_path)
