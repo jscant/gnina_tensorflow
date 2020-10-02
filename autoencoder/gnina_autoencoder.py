@@ -143,6 +143,7 @@ def main():
             loss=args.loss,
             hidden_activation=args.hidden_activation,
             final_activation=args.final_activation,
+            metric_distance_threshold=args.metric_distance_threshold,
             learning_rate_schedule=lrs,
             **opt_args)
     else:
@@ -167,6 +168,7 @@ def main():
         ligmap=args.ligmap,
         recmap=args.recmap,
         save_interval=args.save_interval,
+        metric_distance_threshold=args.metric_distance_threshold,
         overwrite_checkpoints=args.overwrite_checkpoints,
         binary_mask=args.binary_mask,
         loss_log=loss_log,

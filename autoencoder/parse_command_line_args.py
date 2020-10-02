@@ -4,7 +4,8 @@ from pathlib import Path
 import tensorflow as tf
 
 from autoencoder.autoencoder_definitions import nonzero_mae, composite_mse, \
-    zero_mae, nonzero_mse, zero_mse, trimmed_nonzero_mae, trimmed_zero_mae
+    zero_mae, nonzero_mse, zero_mse, trimmed_nonzero_mae, trimmed_zero_mae, \
+    close_mae, close_nonzero_mae, close_zero_mae
 
 
 def str_to_type(arg):
@@ -126,6 +127,9 @@ def pickup(path):
             'zero_mae': zero_mae,
             'trimmed_nonzero_mae': trimmed_nonzero_mae,
             'trimmed_zero_mae': trimmed_zero_mae,
+            'close_mae': close_mae,
+            'close_nonzero_mae': close_nonzero_mae,
+            'close_zero_mae': close_zero_mae
         }
     )
 
@@ -219,6 +223,10 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--final_activation', type=str, required=False, default='sigmoid')
         parser.add_argument('--binary_mask', action='store_true')
+        parser.add_argument('--metric_distance_threshold', type=float,
+                            required=False, default=-1.0,
+                            help='If specified, a set of distance-thresholded '
+                                 'metrics will be reported')
         parser.add_argument(
             '--dimension', type=float, required=False, default=18.0)
         parser.add_argument(

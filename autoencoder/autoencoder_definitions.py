@@ -31,6 +31,7 @@ class AutoEncoderBase(tf.keras.Model):
                  hidden_activation='sigmoid',
                  final_activation='sigmoid',
                  learning_rate_schedule=None,
+                 metric_distance_threshold=-1.0,
                  **opt_args):
         """Setup and compilation of autoencoder.
 
@@ -72,7 +73,7 @@ class AutoEncoderBase(tf.keras.Model):
             self.frac = layers.Input(
                 shape=(1,), dtype=tf.float32, name='frac')
             inputs.append(self.frac)
-        elif loss == 'distance_mse':
+        elif loss == 'distance_mse' or metric_distance_threshold > 0:
             self.distances = layers.Input(
                 shape=dims, dtype=tf.float32, name='distances')
             inputs.append(self.distances)
@@ -86,6 +87,20 @@ class AutoEncoderBase(tf.keras.Model):
             'reconstruction': [mae, trimmed_nonzero_mae, trimmed_zero_mae,
                                zero_mse, nonzero_mse]}
 
+        if metric_distance_threshold > 0:
+            self.add_metric(close_mae(self.input_image, self.reconstruction,
+                                      self.distances, metric_distance_threshold),
+                            name='close_mae')
+            self.add_metric(
+                close_nonzero_mae(
+                    self.input_image, self.reconstruction, self.distances,
+                    metric_distance_threshold),
+                name='close_nonzero_mae')
+            self.add_metric(
+                close_zero_mae(self.input_image, self.reconstruction,
+                               self.distances, metric_distance_threshold),
+                name='close_zero_mae')
+
         if loss == 'composite_mse':
             self.add_loss(composite_mse(
                 self.input_image, self.reconstruction, self.frac))
@@ -96,8 +111,6 @@ class AutoEncoderBase(tf.keras.Model):
         elif loss == 'distance_mse':
             self.add_loss(proximity_mse(
                 self.input_image, self.reconstruction, self.distances))
-            self.add_metric(close_mae(self.input_image, self.reconstruction,
-                                      self.distances, 6.0), name='close_mae')
             self.compile(
                 optimizer=optimiser(**opt_args),
                 metrics=metrics
@@ -500,6 +513,68 @@ def close_mae(target, reconstruction, distances, threshold):
         ligand channel input.
     """
     mask = tf.cast(tf.math.greater(distances, float(threshold)), tf.float32)
+    mask_sum = tf.reduce_sum(mask)
+    difference = tf.math.abs(target - reconstruction)
+    masked_difference = tf.multiply(mask, difference)
+    return tf.reduce_sum(masked_difference) / mask_sum
+
+
+def close_nonzero_mae(target, reconstruction, distances, threshold):
+    """MAE thresholded by proximity to ligand density, for non-zero inputs.
+
+    Finds the MAE for non zero inputs which are closer than a threshold distance
+    from any ligand channel with a value greater than zero. This should only be
+    used as a metric (not a loss function).
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        distances: grid of the same dimension as target containing distances
+            between each point and the nearest point with ligand density. This
+            should be constructed by stacking n_channels copies of the 3D output
+            of gnina_tensorflow_cpp.calculate_distances on a new axis at
+            position 1.
+        threshold: threshold distance (Angstroms)
+
+    Returns:
+        Mean average error for values within <threshold> angstroms of a nonzero
+        ligand channel input, and which have values greater than zero.
+    """
+    dist_mask = tf.cast(
+        tf.math.greater(distances, float(threshold)), tf.float32)
+    nonzero_mask = tf.cast(tf.math.not_equal(target, 0.0), tf.float32)
+    mask = tf.multiply(dist_mask, nonzero_mask)
+    mask_sum = tf.reduce_sum(mask)
+    difference = tf.math.abs(target - reconstruction)
+    masked_difference = tf.multiply(mask, difference)
+    return tf.reduce_sum(masked_difference) / mask_sum
+
+
+def close_zero_mae(target, reconstruction, distances, threshold):
+    """MAE thresholded by proximity to ligand density, for inputs equal to zero.
+
+    Finds the MAE for inputs equal to zero which are closer than a threshold
+    distance from any ligand channel with a value greater than zero. This should
+    only be used as a metric (not a loss function).
+
+    Arguments:
+        target: input tensor
+        reconstruction: output tensor of the autoencoder
+        distances: grid of the same dimension as target containing distances
+            between each point and the nearest point with ligand density. This
+            should be constructed by stacking n_channels copies of the 3D output
+            of gnina_tensorflow_cpp.calculate_distances on a new axis at
+            position 1.
+        threshold: threshold distance (Angstroms)
+
+    Returns:
+        Mean average error for values within <threshold> angstroms of a nonzero
+        ligand channel input, and which have values equal to zero.
+    """
+    dist_mask = tf.cast(
+        tf.math.greater(distances, float(threshold)), tf.float32)
+    nonzero_mask = tf.cast(tf.math.equal(target, 0.0), tf.float32)
+    mask = tf.multiply(dist_mask, nonzero_mask)
     mask_sum = tf.reduce_sum(mask)
     difference = tf.math.abs(target - reconstruction)
     masked_difference = tf.multiply(mask, difference)

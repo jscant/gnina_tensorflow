@@ -16,14 +16,14 @@ from gnina_tensorflow_cpp import calculate_distances as cd
 from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
-    print_with_overwrite, _calculate_ligand_distances, Timer
+    print_with_overwrite
 
 
 def train(model, data_root, train_types, iterations, batch_size,
           dimension, resolution, loss_fn, save_path=None,
-          overwrite_checkpoints=False, ligmap=None, recmap=None,
-          save_interval=-1, binary_mask=False, silent=False,
-          loss_log=None, starting_iter=0):
+          metric_distance_threshold=-1.0, overwrite_checkpoints=False,
+          ligmap=None, recmap=None, save_interval=-1, binary_mask=False,
+          silent=False, loss_log=None, starting_iter=0):
     """Train an autoencoder.
     
     Arguments:
@@ -43,6 +43,9 @@ def train(model, data_root, train_types, iterations, batch_size,
             line to be used in input grid construction
         save_interval: interval (in batches) on which model weights are saved as
             a checkpoint
+        metric_distance_threshold: if greater than zero,
+            distance-from-ligand-thresholded metrics will be reported with this
+            parameter as the threshold (in Angstroms)
         overwrite_checkpoints: saved model states overwrite previously saved
             ones from earlier in training
         binary_mask: instead of real numbers, input grid is binary where a 1
@@ -101,7 +104,8 @@ def train(model, data_root, train_types, iterations, batch_size,
 
     # Are we loading previous loss history or starting afresh?
     if loss_log is None:
-        loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean learning_rate\n'
+        loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean ' \
+                   'close_mae close_zero_mae close_nonzero_mae learning_rate\n'
 
     if not silent and save_path is not None:
         save_path = Path(save_path)
@@ -142,7 +146,7 @@ def train(model, data_root, train_types, iterations, batch_size,
             x_inputs['frac'] = tf.constant(
                 loss_ratio, shape=(batch_size,))
 
-        if loss_fn == 'distance_mse':
+        if metric_distance_threshold > 0:
             spatial_information = cd(
                 rec_channels, np.asfortranarray(input_tensor_numpy), resolution)
             x_inputs['distances'] = spatial_information
@@ -170,8 +174,12 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5:0.8f}'.format(
-            iteration, loss['loss'], nonzero_mae, zero_mae, mean_nonzero, lr)
+        loss_str = ('{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5:0.5f} {6:0.5f} '
+                    '{7:0.5f} {8:0.8f}').format(
+            iteration, loss['loss'], nonzero_mae, zero_mae,
+            mean_nonzero, loss.get('close_mae', 'n/a'),
+            loss.get('close_nonzero_mae', 'n/a'),
+            loss.get('close_zero_mae', 'n/a'), lr)
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
@@ -185,13 +193,18 @@ def train(model, data_root, train_types, iterations, batch_size,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f} | Close MAE: {9:0.4f} | '
-                              'Learning rate: {8:.3e}')
-            console_output = console_output.format(
+                              '| Zero MAE: {5:0.4f}\nClose MAE: {9:0.4f} | '
+                              'Close Non-zero MAE: {10:0.4f} | '
+                              'Close Zero MAE: {11:0.4f} | '
+                              'Learning rate: {8:.3e}').format(
                 iteration, iterations, loss_fn, loss['loss'], nonzero_mae,
                 zero_mae, format_time(time_elapsed), formatted_eta, lr,
-                loss['close_mae']
+                loss.get('close_mae', 'n/a'),
+                loss.get('close_nonzero_mae', 'n/a'),
+                loss.get('close_zero_mae', 'n/a')
             )
+            if iteration == starting_iter:
+                print()
             print_with_overwrite(console_output)
 
         if save_path is not None:
