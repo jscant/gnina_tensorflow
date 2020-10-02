@@ -67,16 +67,20 @@ class AutoEncoderBase(tf.keras.Model):
         elif isinstance(optimiser, str):
             optimiser = tf.keras.optimizers.get(optimiser).__class__
 
-        # Composite mse requires an extra weight input
         inputs = [self.input_image]
-        if loss == 'composite_mse':
-            self.frac = layers.Input(
-                shape=(1,), dtype=tf.float32, name='frac')
-            inputs.append(self.frac)
+
+        # Do we need to calculate and input the (expensive) distance-to-ligand
+        # grid
         if loss == 'distance_mse' or metric_distance_threshold > 0:
             self.distances = layers.Input(
                 shape=dims, dtype=tf.float32, name='distances')
             inputs.append(self.distances)
+
+        # Composite mse requires an extra weight input
+        if loss == 'composite_mse':
+            self.frac = layers.Input(
+                shape=(1,), dtype=tf.float32, name='frac')
+            inputs.append(self.frac)
 
         super().__init__(
             inputs=inputs,
@@ -454,7 +458,8 @@ def composite_mse(target, reconstruction, ratio):
         where nonzero_mse and zero_mse are the MSE for the nonzero and zero
         parts of target respectively.
     """
-    frac = tf.divide(ratio, 1. + ratio)
+    # Reduce_mean required for broadcast shape reasons
+    frac = tf.reduce_mean(tf.divide(ratio, 1. + ratio))
     return tf.math.add(
         tf.math.multiply(frac, trimmed_nonzero_mse(target, reconstruction)),
         tf.math.multiply(1. - frac, trimmed_zero_mse(target, reconstruction)))

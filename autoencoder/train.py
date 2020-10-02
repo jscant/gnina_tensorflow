@@ -155,9 +155,7 @@ def train(model, data_root, train_types, iterations, batch_size,
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
         loss = model.train_on_batch(
-            x_inputs,
-            {'reconstruction': input_tensor_numpy},
-            return_dict=True)
+            x_inputs, {'reconstruction': input_tensor_numpy}, return_dict=True)
 
         zero_mae = loss['reconstruction_trimmed_zero_mae']
         nonzero_mae = loss['reconstruction_trimmed_nonzero_mae']
@@ -174,11 +172,16 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        loss_str = ('{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f} {5:0.5f} {6:0.5f} '
-                    '{7:0.5f} {8:0.8f}').format(
+        loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
             iteration, loss['loss'], nonzero_mae, zero_mae,
-            mean_nonzero, loss.get('close_mae', 'n/a'),
-            loss.get('close_nonzero_mae', 'n/a'),
+            mean_nonzero)
+        if metric_distance_threshold > 0:
+            loss_str += ' {0:0.5f} {1:0.5f} {2:0.5f} {3:0.3e}'
+        else:
+            loss_str += ' {0} {1} {2} {3:0.3e}'
+
+        loss_str = loss_str.format(
+            loss.get('close_mae', 'n/a'), loss.get('close_nonzero_mae', 'n/a'),
             loss.get('close_zero_mae', 'n/a'), lr)
 
         time_elapsed = time.time() - start_time
@@ -193,16 +196,23 @@ def train(model, data_root, train_types, iterations, batch_size,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f}\nClose MAE: {9:0.4f} | '
-                              'Close Non-zero MAE: {10:0.4f} | '
-                              'Close Zero MAE: {11:0.4f} | '
-                              'Learning rate: {8:.3e}').format(
+                              '| Zero MAE: {5:0.4f}\n').format(
                 iteration, iterations, loss_fn, loss['loss'], nonzero_mae,
-                zero_mae, format_time(time_elapsed), formatted_eta, lr,
+                zero_mae, format_time(time_elapsed), formatted_eta)
+
+            if metric_distance_threshold > 0:
+                console_output += ('Close MAE: {0:0.4f} | Close Non-zero MAE: '
+                                   '{1:0.4f} | Close Zero MAE: {2:0.4f} | '
+                                   'Learning rate: {3:.3e}')
+            else:
+                console_output += ('Close MAE: {0} | Close Non-zero MAE: {1} | '
+                                   'Close Zero MAE: {2} | Learning rate: '
+                                   '{3:.3e}')
+            console_output = console_output.format(
                 loss.get('close_mae', 'n/a'),
                 loss.get('close_nonzero_mae', 'n/a'),
-                loss.get('close_zero_mae', 'n/a')
-            )
+                loss.get('close_zero_mae', 'n/a'),
+                lr)
             if iteration == starting_iter:
                 print()
             print_with_overwrite(console_output)
