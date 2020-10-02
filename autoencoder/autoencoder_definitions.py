@@ -517,7 +517,7 @@ def close_mae(target, reconstruction, distances, threshold):
         Mean average error for values within <threshold> angstroms of a nonzero
         ligand channel input.
     """
-    mask = tf.cast(tf.math.greater(distances, float(threshold)), tf.float32)
+    mask = tf.cast(tf.math.less_equal(distances, float(threshold)), tf.float32)
     mask_sum = tf.reduce_sum(mask)
     difference = tf.math.abs(target - reconstruction)
     masked_difference = tf.multiply(mask, difference)
@@ -546,7 +546,7 @@ def close_nonzero_mae(target, reconstruction, distances, threshold):
         ligand channel input, and which have values greater than zero.
     """
     dist_mask = tf.cast(
-        tf.math.greater(distances, float(threshold)), tf.float32)
+        tf.math.less_equal(distances, float(threshold)), tf.float32)
     nonzero_mask = tf.cast(tf.math.not_equal(target, 0.0), tf.float32)
     mask = tf.multiply(dist_mask, nonzero_mask)
     mask_sum = tf.reduce_sum(mask)
@@ -577,7 +577,7 @@ def close_zero_mae(target, reconstruction, distances, threshold):
         ligand channel input, and which have values equal to zero.
     """
     dist_mask = tf.cast(
-        tf.math.greater(distances, float(threshold)), tf.float32)
+        tf.math.less_equal(distances, float(threshold)), tf.float32)
     nonzero_mask = tf.cast(tf.math.equal(target, 0.0), tf.float32)
     mask = tf.multiply(dist_mask, nonzero_mask)
     mask_sum = tf.reduce_sum(mask)
