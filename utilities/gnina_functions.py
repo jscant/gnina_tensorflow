@@ -170,17 +170,25 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     batch = example_provider.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=train)
 
+    input_numpy = input_tensor.tonumpy()
+
     if autoencoder is not None:
-        inputs = [input_tensor.tonumpy()]
+        inputs = {'input_image': input_numpy}
         try:
             autoencoder.get_layer('frac')
         except ValueError:
             pass
         else:
-            inputs.append(tf.constant(1., shape=(batch_size,)))
+            inputs.update({'frac': tf.constant(1., shape=(batch_size,))})
+        try:
+            autoencoder.get_layer('distances')
+        except ValueError:
+            pass
+        else:
+            inputs.update({'distances': np.zeros_like(input_numpy)})
         gnina_input, _ = autoencoder.predict_on_batch(inputs)
     else:
-        gnina_input = input_tensor.tonumpy()
+        gnina_input = input_numpy
 
     if labels_tensor is None:  # We don't know labels; just return predictions
         return model.predict_on_batch(gnina_input)
