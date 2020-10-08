@@ -10,18 +10,21 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 """
 
 import argparse
+import os
+import time
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
-import os
-import time
-
-from autoencoder.autoencoder_definitions import pickup
-from classifier.inference import inference
-from classifier.model_definitions import define_baseline_model, define_densefs_model
-from utilities.gnina_functions import process_batch, print_with_overwrite, format_time
-from pathlib import Path
 from tensorflow.keras.utils import plot_model
+
+from autoencoder.parse_command_line_args import pickup
+from classifier.inference import inference
+from classifier.model_definitions import define_baseline_model, \
+    define_densefs_model
+from utilities.gnina_functions import process_batch, print_with_overwrite, \
+    format_time
 
 
 def main():
@@ -31,17 +34,17 @@ def main():
         '--data_root', '-r', type=str, required=False, default=Path.home(),
         help=('Path relative to which all paths in specified types files will '
               'be taken')
-        )
+    )
     parser.add_argument(
         '--train', type=str, required=True,
         help=('Types file containing training examples including label, '
               'receptor path and ligand path')
-        )
+    )
     parser.add_argument(
         '--test', type=str, required=False, help=(
             'Types file containing training examples including label, receptor'
             'path and ligand path')
-        )
+    )
     parser.add_argument(
         '--densefs', '-d', action='store_true',
         help='Use DenseFS rather than Gnina (baseline)')
@@ -55,7 +58,7 @@ def main():
         '--save_path', '-s', type=str, required=False, default='.',
         help=('Directory where named folder will be created, in which '
               'results, models and config will be saved')
-        )
+    )
     parser.add_argument(
         '--save_interval', type=int, default=10000,
         help='How often to save a snapshot of the model during training')
@@ -71,12 +74,12 @@ def main():
         '--autoencoder', type=str, required=False,
         help=('Use trained autoencoder reconstruction as inputs for training '
               'and testing')
-        )
+    )
     parser.add_argument(
         '--dimension', type=float, required=False, default=23.0,
         help=('Size of cube containing receptor atoms centred on ligand in '
               'Angstroms (default=23.0)')
-        )
+    )
     parser.add_argument(
         '--resolution', type=float, required=False, default=0.5,
         help='Length of the side of each voxel in Angstroms (default=0.5)')
@@ -84,7 +87,7 @@ def main():
         '--ligmap', type=str, required=False,
         help=('Text file containing space-delimited line with atom categories '
               'for each ligand channel input')
-        )
+    )
     parser.add_argument(
         '--recmap', type=str, required=False,
         help=('Text file containing space-delimited line with atom categories '
@@ -93,7 +96,7 @@ def main():
         '--name', type=str, required=False,
         help=('Name of folder to store results (default is current UTC time '
               'in seconds)')
-        )
+    )
     parser.add_argument(
         '--seed', type=int, required=False,
         default=np.random.randint(0, int(1e7)),
@@ -115,25 +118,25 @@ def main():
     data_root = Path(args.data_root).resolve()
     train_types = Path(args.train).resolve()
     test_types = Path(args.test).resolve() if args.test is not None else None
-    
+
     if args.name is None:
         folder = os.getenv('SLURM_JOB_ID')
         if not isinstance(folder, str):
             folder = str(int(time.time()))
     else:
         folder = args.name
-    
+
     args.save_path = Path(args.save_path, folder).resolve()
-    
+
     # Use cpu rather than gpu if specified
     molgrid.set_gpu_enabled(1 - args.use_cpu)
     molgrid.set_random_seed(args.seed)
 
     # If specified, use autoencoder reconstructions to train/test
-    autoencoder = None    
-    if isinstance(args.autoencoder, str):    
+    autoencoder = None
+    if isinstance(args.autoencoder, str):
         autoencoder = pickup(args.autoencoder)
-    
+
     gap = 100  # Window to average training loss over (in batches)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
@@ -146,10 +149,11 @@ def main():
         e = molgrid.ExampleProvider(
             rec_typer, lig_typer, data_root=str(data_root),
             balanced=True, shuffle=True)
-    
+
     e.populate(str(train_types))
 
-    gmaker = molgrid.GridMaker(dimension=args.dimension, resolution=args.resolution)
+    gmaker = molgrid.GridMaker(dimension=args.dimension,
+                               resolution=args.resolution)
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (args.batch_size,) + dims
 
@@ -181,14 +185,14 @@ def main():
     start_time = time.time()
     for iteration in range(args.iterations):
         if (not (iteration + 1) % args.save_interval and
-            iteration < args.iterations - 1):
+                iteration < args.iterations - 1):
             checkpoint_path = Path(
                 args.save_path,
                 'checkpoints',
                 'ckpt_model_{}'.format(iteration + 1))
-            
+
             model.save(checkpoint_path)
-        
+
         # Data: e > gmaker > input_tensor > network (forward and backward pass)
         loss = process_batch(model, e, gmaker, input_tensor, labels,
                              train=True, autoencoder=autoencoder)
@@ -200,22 +204,24 @@ def main():
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(loss_history_fname, 'w') as f:
             f.write(losses_string)
-            
+
         time_elapsed = time.time() - start_time
-        time_per_iter = time_elapsed / (iteration + 1) # Let's not div0
+        time_per_iter = time_elapsed / (iteration + 1)  # Let's not div0
         time_remaining = time_per_iter * (args.iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
         if not iteration:
             print('\n')
 
-        console_output = ('Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | Time remaining: {4}').format(
-                 iteration, args.iterations, loss, format_time(time_elapsed), formatted_eta)
+        console_output = (
+            'Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | Time remaining: {4}').format(
+            iteration, args.iterations, loss, format_time(time_elapsed),
+            formatted_eta)
         print_with_overwrite(console_output)
 
     # Save model for later inference
     checkpoint_path = args.save_path / 'checkpoints' / 'final_model_{}'.format(
-            args.iterations)
+        args.iterations)
     model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
@@ -227,7 +233,7 @@ def main():
         model_str))
     plt.savefig(args.save_path / 'densefs_loss.png')
     print('Finished {}\n\n'.format(model_str))
-    
+
     # Perform inference on training set if required
     if args.inference_on_training_set:
         inference(
@@ -241,7 +247,7 @@ def main():
             model, test_types, data_root, args.save_path, args.batch_size,
             gmaker, input_tensor, labels, autoencoder, ligmap=args.ligmap,
             recmap=args.recmap)
-        
+
 
 if __name__ == '__main__':
     main()

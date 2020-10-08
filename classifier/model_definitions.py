@@ -79,7 +79,7 @@ def define_densefs_model(dims, bc=False):
     Returns:
         Compiled keras model with original gnina architecture
     """
-    input_layer = Input(shape=dims, dtype=tf.float32)
+    input_layer = Input(shape=dims, dtype=tf.float32, name='input_image')
 
     if bc:
         db = dense.tf_dense_block
@@ -109,7 +109,8 @@ def define_densefs_model(dims, bc=False):
                                         name='representation')(x)
 
     # Final layer (already flattened by global max pool)
-    output_layer = Dense(2, activation='softmax')(representation)
+    output_layer = Dense(
+        2, activation='softmax', name='probabilities')(representation)
 
     # Compile and return model
     model = keras.Model(inputs=input_layer, outputs=output_layer)
