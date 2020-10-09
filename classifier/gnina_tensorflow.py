@@ -140,15 +140,18 @@ def main():
     gap = 100  # Window to average training loss over (in batches)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
+    example_provider_kwargs = {
+        'data_root': str(Path(data_root).expanduser()), 'balanced': True,
+        'shuffle': True, 'cache_structs': False
+    }
     if args.ligmap is None:
         e = molgrid.ExampleProvider(
-            data_root=str(data_root), balanced=True, shuffle=True)
+            **example_provider_kwargs)
     else:
         rec_typer = molgrid.FileMappedGninaTyper(args.recmap)
         lig_typer = molgrid.FileMappedGninaTyper(args.ligmap)
         e = molgrid.ExampleProvider(
-            rec_typer, lig_typer, data_root=str(data_root),
-            balanced=True, shuffle=True)
+            rec_typer, lig_typer, **example_provider_kwargs)
 
     e.populate(str(train_types))
 
