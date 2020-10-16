@@ -3,9 +3,7 @@ from pathlib import Path
 
 import tensorflow as tf
 
-from autoencoder.autoencoder_definitions import nonzero_mae, composite_mse, \
-    zero_mae, nonzero_mse, zero_mse, trimmed_nonzero_mae, trimmed_zero_mae, \
-    close_mae, close_nonzero_mae, close_zero_mae
+from autoencoder import autoencoder_definitions
 
 
 def str_to_type(arg):
@@ -120,16 +118,17 @@ def pickup(path):
     ae = tf.keras.models.load_model(
         path,
         custom_objects={
-            'zero_mse': zero_mse,
-            'nonzero_mse': nonzero_mse,
-            'composite_mse': composite_mse,
-            'nonzero_mae': nonzero_mae,
-            'zero_mae': zero_mae,
-            'trimmed_nonzero_mae': trimmed_nonzero_mae,
-            'trimmed_zero_mae': trimmed_zero_mae,
-            'close_mae': close_mae,
-            'close_nonzero_mae': close_nonzero_mae,
-            'close_zero_mae': close_zero_mae
+            'zero_mse': autoencoder_definitions.zero_mse,
+            'nonzero_mse': autoencoder_definitions.nonzero_mse,
+            'composite_mse': autoencoder_definitions.composite_mse,
+            'nonzero_mae': autoencoder_definitions.nonzero_mae,
+            'zero_mae': autoencoder_definitions.zero_mae,
+            'trimmed_nonzero_mae': autoencoder_definitions.trimmed_nonzero_mae,
+            'trimmed_zero_mae': autoencoder_definitions.trimmed_zero_mae,
+            'close_mae': autoencoder_definitions.close_mae,
+            'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
+            'close_zero_mae': autoencoder_definitions.close_zero_mae,
+            'proximity_mse': autoencoder_definitions.proximity_mse
         }
     )
 
