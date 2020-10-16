@@ -19,6 +19,10 @@ import tensorflow as tf
 
 from collections import defaultdict
 from pathlib import Path
+
+from autoencoder.autoencoder_definitions import zero_mse, nonzero_mse, \
+    composite_mse, nonzero_mae, zero_mae, trimmed_nonzero_mae, trimmed_zero_mae, \
+    close_mae, close_nonzero_mae, close_zero_mae
 from utilities.gnina_functions import get_test_info, Timer, process_batch, \
     print_with_overwrite
 
@@ -63,16 +67,18 @@ def inference(model, test_types, data_root, savepath, batch_size,
     predictions_fname = savepath / predictions_fname
     
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
-    
+
+    example_provider_kwargs = {
+        'data_root': str(Path(data_root).expanduser()), 'balanced': False,
+        'shuffle': False, 'cache_structs': False
+    }
     if recmap is not None and ligmap is not None:
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e_test = molgrid.ExampleProvider(
-            rec_typer, lig_typer, data_root=str(data_root), balanced=False,
-            shuffle=False)
+            rec_typer, lig_typer, **example_provider_kwargs)
     else:
-        e_test = molgrid.ExampleProvider(
-            data_root=str(data_root), balanced=False, shuffle=False)
+        e_test = molgrid.ExampleProvider(**example_provider_kwargs)
         
     e_test.populate(str(test_types))
 
@@ -103,7 +109,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
         for iteration in range(iterations):
             labels_numpy, predictions = process_batch(
                 model, e_test, gmaker, input_tensor, labels_tensor=labels, 
-                train=False, autoencoder=autoencoder)
+                train=False, autoencoder=None)
             for i in range(batch_size):
                 index = iteration*batch_size + i
                 rec_path = paths[index][0]
@@ -183,15 +189,17 @@ if __name__ == '__main__':
     molgrid.set_gpu_enabled(1-int(args.use_cpu))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
+    example_provider_kwargs = {
+        'data_root': str(Path(args.data_root).expanduser()), 'balanced': False,
+        'shuffle': False, 'cache_structs': False
+    }
     if recmap is not None and ligmap is not None:
         rec_typer = molgrid.FileMappedGninaTyper(recmap)
         lig_typer = molgrid.FileMappedGninaTyper(ligmap)
         e = molgrid.ExampleProvider(
-            rec_typer, lig_typer, data_root=str(args.data_root),
-            balanced=False, shuffle=True)
+            rec_typer, lig_typer, **example_provider_kwargs)
     else:
-        e = molgrid.ExampleProvider(
-            data_root=str(args.data_root), balanced=False, shuffle=True)
+        e = molgrid.ExampleProvider(**example_provider_kwargs)
     e.populate(str(args.test))
 
     gmaker = molgrid.GridMaker(**gridmaker_args)
@@ -201,6 +209,18 @@ if __name__ == '__main__':
 
     model = tf.keras.models.load_model(
         args.model_dir,
+        custom_objects={
+            'zero_mse': zero_mse,
+            'nonzero_mse': nonzero_mse,
+            'composite_mse': composite_mse,
+            'nonzero_mae': nonzero_mae,
+            'zero_mae': zero_mae,
+            'trimmed_nonzero_mae': trimmed_nonzero_mae,
+            'trimmed_zero_mae': trimmed_zero_mae,
+            'close_mae': close_mae,
+            'close_nonzero_mae': close_nonzero_mae,
+            'close_zero_mae': close_zero_mae
+        }
     )
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size,
