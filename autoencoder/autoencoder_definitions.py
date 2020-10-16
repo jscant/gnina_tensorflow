@@ -164,6 +164,12 @@ class AutoEncoderBase(tf.keras.Model):
         """Overloaded method; see base class (tf.keras.Model)."""
         config = super().get_config()
         config.update({'learning_rate_schedule': self.learning_rate_schedule})
+        try:
+            d = self.get_layer('distances')
+        except ValueError:
+            pass
+        else:
+            config.update({'distances': d})
         return config
 
 
@@ -489,8 +495,7 @@ def proximity_mse(target, reconstruction, distances):
 
             weighted_squared_error = squared_error * (1 / (distance**2 + 0.5)
     """
-    distances = tf.math.sqrt(distances + 2.0)
-    proximities = 2.0 / distances
+    proximities = 0.5 + 0.5 * (tf.math.tanh(4.0 - distances))
     squared_difference = tf.math.squared_difference(target, reconstruction)
     masked_sq_difference = tf.math.multiply(proximities, squared_difference)
     return masked_sq_difference

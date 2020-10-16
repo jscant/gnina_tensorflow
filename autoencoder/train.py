@@ -146,7 +146,7 @@ def train(model, data_root, train_types, iterations, batch_size,
             x_inputs['frac'] = tf.constant(
                 loss_ratio, shape=(batch_size,))
 
-        if metric_distance_threshold > 0:
+        if metric_distance_threshold > 0 or loss_fn == 'distance_mse':
             spatial_information = cd(
                 rec_channels, np.asfortranarray(input_tensor_numpy), resolution)
             x_inputs['distances'] = spatial_information
