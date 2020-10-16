@@ -163,7 +163,7 @@ def process_batch(model, example_provider, gmaker, input_tensor,
         RuntimeError: if labels_tensor is None and train is True
     """
     if train and labels_tensor is None:
-        raise RuntimeError('Labels must be provided for backpropagation',
+        raise RuntimeError('Labels must be provided for backpropagation ',
                            'if train == True')
 
     batch_size = input_tensor.shape[0]
@@ -171,6 +171,7 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     gmaker.forward(batch, input_tensor, 0, random_rotation=train)
 
     input_numpy = input_tensor.tonumpy()
+    tf.keras.backend.clear_session()
 
     if autoencoder is not None:
         inputs = {'input_image': input_numpy}
