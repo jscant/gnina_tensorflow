@@ -10,7 +10,6 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 """
 
 import argparse
-import gc
 import os
 import time
 from pathlib import Path
@@ -94,6 +93,10 @@ def main():
         '--resolution', type=float, required=False, default=0.5,
         help='Length of the side of each voxel in Angstroms (default=0.5)')
     parser.add_argument(
+        '--binary_mask', action='store_true',
+        help='Inputs are converted from real to binary (0 for 0, 1 for > 0)'
+    )
+    parser.add_argument(
         '--ligmap', type=str, required=False,
         help=('Text file containing space-delimited line with atom categories '
               'for each ligand channel input')
@@ -172,7 +175,8 @@ def main():
     e.populate(str(train_types))
 
     gmaker = molgrid.GridMaker(dimension=args.dimension,
-                               resolution=args.resolution)
+                               resolution=args.resolution,
+                               binary=args.binary_mask)
     dims = gmaker.grid_dimensions(e.num_types())
     tensor_shape = (args.batch_size,) + dims
 

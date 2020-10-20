@@ -159,7 +159,6 @@ if __name__ == '__main__':
     parser.add_argument('test', type=str)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--data_root', type=str, default='')
-    parser.add_argument('--densefs', '-d', action='store_true')
     parser.add_argument('--save_path', '-s', type=str, default='')
     parser.add_argument('--use_cpu', '-c', action='store_true')
     args = parser.parse_args()
