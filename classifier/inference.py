@@ -14,11 +14,11 @@ gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
-import molgrid
-import tensorflow as tf
-
 from collections import defaultdict
 from pathlib import Path
+
+import molgrid
+import tensorflow as tf
 
 from autoencoder.autoencoder_definitions import zero_mse, nonzero_mse, \
     composite_mse, nonzero_mae, zero_mae, trimmed_nonzero_mae, trimmed_zero_mae, \
@@ -61,11 +61,11 @@ def inference(model, test_types, data_root, savepath, batch_size,
         ligmap: Text file containing definitions of ligand input channels
         recmap: Text file containing definitions of receptor input channels
     """
-    savepath = Path(savepath).resolve() # in case this is a string
+    savepath = Path(savepath).resolve()  # in case this is a string
     test_types_stem = Path(test_types).stem
     predictions_fname = 'predictions_{}.txt'.format(test_types_stem)
     predictions_fname = savepath / predictions_fname
-    
+
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
 
     example_provider_kwargs = {
@@ -79,7 +79,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
             rec_typer, lig_typer, **example_provider_kwargs)
     else:
         e_test = molgrid.ExampleProvider(**example_provider_kwargs)
-        
+
     e_test.populate(str(test_types))
 
     paths, size = get_test_info(test_types)  # For indexing in output
@@ -94,7 +94,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
 
     if labels is None:
         labels = molgrid.MGrid1f(batch_size)
-        
+
     # Make output directory
     savepath.mkdir(parents=True, exist_ok=True)
 
@@ -103,15 +103,16 @@ def inference(model, test_types, data_root, savepath, batch_size,
     test_output_string = ''
     with open(predictions_fname, 'w') as f:
         f.write('')
-        
+
     iterations = size // batch_size
     with Timer() as t:
         for iteration in range(iterations):
+            tf.keras.backend.clear_session()
             labels_numpy, predictions = process_batch(
-                model, e_test, gmaker, input_tensor, labels_tensor=labels, 
+                model, e_test, gmaker, input_tensor, labels_tensor=labels,
                 train=False, autoencoder=None)
             for i in range(batch_size):
-                index = iteration*batch_size + i
+                index = iteration * batch_size + i
                 rec_path = paths[index][0]
                 lig_path = paths[index][1]
                 labels_dict[rec_path][lig_path] = labels_numpy[i]
@@ -128,7 +129,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
             print_with_overwrite('Iteration: {0}/{1}'.format(
                 iteration + 1, iterations + int(size % batch_size)))
 
-        remainder = size % batch_size            
+        remainder = size % batch_size
         labels_numpy, predictions = process_batch(
             model, e_test, gmaker, input_tensor, labels_tensor=labels,
             train=False, autoencoder=autoencoder)
@@ -162,31 +163,30 @@ if __name__ == '__main__':
     parser.add_argument('--save_path', '-s', type=str, default='')
     parser.add_argument('--use_cpu', '-c', action='store_true')
     args = parser.parse_args()
-    
+
     # Load some parameters from orginal model config
     config = Path(args.model_dir).parents[1] / 'config'
-    recmap, ligmap = 'None', 'None'
-    gridmaker_args = { 'dimension': None, 'resolution': None }
+    recmap, ligmap = None, None
+    gridmaker_args = {}
     with open(config, 'r') as f:
         for line in f.readlines():
             chunks = line.strip().split()
-            if len(chunks):
-                if chunks[0].startswith('recmap'):
-                    recmap = chunks[1]
-                elif chunks[0].startswith('ligmap'):
-                    ligmap = chunks[1]
-                elif chunks[0].startswith('dimension'):
-                    gridmaker_args['dimension'] = float(chunks[1])
-                elif chunks[0].startswith('resolution'):
-                    gridmaker_args['resolution'] = float(chunks[1])
-                    
-    gridmaker_args = {i: j for i, j in gridmaker_args.items() if j is not None}
-    ligmap = ligmap if ligmap != 'None' else None
-    recmap = recmap if recmap != 'None' else None
+            if len(chunks) == 2:
+                param = chunks[0]
+                value = chunks[1]
+                if param == 'recmap':
+                    recmap = value
+                elif param == 'ligmap':
+                    ligmap = value
+                elif param == 'dimension':
+                    gridmaker_args['dimension'] = float(value)
+                elif param == 'resolution':
+                    gridmaker_args['resolution'] = float(value)
+                elif param == 'binary_mask':
+                    if value == 'True':
+                        gridmaker_args['binary'] = True
 
-    tf.keras.backend.clear_session()
-    
-    molgrid.set_gpu_enabled(1-int(args.use_cpu))
+    molgrid.set_gpu_enabled(1 - int(args.use_cpu))
 
     # Setup libmolgrid to feed Examples into tensorflow objects
     example_provider_kwargs = {
