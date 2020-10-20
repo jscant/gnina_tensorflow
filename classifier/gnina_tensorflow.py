@@ -275,19 +275,25 @@ def main():
     plt.savefig(args.save_path / 'densefs_loss.png')
     print('Finished {}\n\n'.format(model_str))
 
+    # Wise to free these before making a new input_tensor for inference
+    del input_tensor
+    del gmaker
+
     # Perform inference on training set if required
     if args.inference_on_training_set:
         inference(
             model, train_types, data_root, args.save_path, args.batch_size,
-            gmaker, input_tensor, labels, autoencoder, ligmap=args.ligmap,
-            recmap=args.recmap)
+            labels, autoencoder, resolution=args.resolution,
+            dimension=args.dimension, ligmap=args.ligmap, recmap=args.recmap,
+            binary_mask=args.binary_mask)
 
     # Perform inference if test types file is provided
     if test_types is not None:
         inference(
             model, test_types, data_root, args.save_path, args.batch_size,
-            gmaker, input_tensor, labels, autoencoder, ligmap=args.ligmap,
-            recmap=args.recmap)
+            labels, autoencoder, resolution=args.resolution,
+            dimension=args.dimension, ligmap=args.ligmap, recmap=args.recmap,
+            binary_mask=args.binary_mask)
 
 
 if __name__ == '__main__':

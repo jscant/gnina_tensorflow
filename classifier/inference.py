@@ -27,9 +27,9 @@ from utilities.gnina_functions import get_test_info, Timer, process_batch, \
     print_with_overwrite
 
 
-def inference(model, test_types, data_root, savepath, batch_size,
-              gmaker=None, input_tensor=None, labels=None, autoencoder=None,
-              dimension=23.0, resolution=0.5, ligmap=None, recmap=None):
+def inference(model, test_types, data_root, savepath, batch_size, labels=None,
+              autoencoder=None, dimension=23.0, resolution=0.5, ligmap=None,
+              recmap=None, binary_mask=False):
     """Use trained keras model to perform inference on gnina input data.
     
     The model should take a four dimentional tensor as input, with
@@ -46,9 +46,6 @@ def inference(model, test_types, data_root, savepath, batch_size,
         batch_size: Number of inputs to perform inference on at once. This
             does not affect predictions, and a large batch size may cause
             out of memory errors.
-        gmaker: molgrid.Gmaker object. If None, one will be created.
-        input_tensor: molgrid.MGrid5f object. If none, one will be created
-            with dimensions inferred from the inputs.
         labels: molgrid.MGrid1f object where predictions are stored for each
             batch.
         autoencoder: object derived from AutoEncoderBase virtual class; all
@@ -60,6 +57,7 @@ def inference(model, test_types, data_root, savepath, batch_size,
             in Angstroms
         ligmap: Text file containing definitions of ligand input channels
         recmap: Text file containing definitions of receptor input channels
+        binary_mask: Inputs are either in {0, 1} rather than non-negative real
     """
     savepath = Path(savepath).resolve()  # in case this is a string
     test_types_stem = Path(test_types).stem
@@ -84,13 +82,12 @@ def inference(model, test_types, data_root, savepath, batch_size,
 
     paths, size = get_test_info(test_types)  # For indexing in output
 
-    if gmaker is None:
-        gmaker = molgrid.GridMaker(dimension=dimension, resolution=resolution)
+    gmaker = molgrid.GridMaker(
+        dimension=dimension, resolution=resolution, binary=binary_mask)
     dims = gmaker.grid_dimensions(e_test.num_types())
     tensor_shape = (batch_size,) + dims
 
-    if input_tensor is None:
-        input_tensor = molgrid.MGrid5f(*tensor_shape)
+    input_tensor = molgrid.MGrid5f(*tensor_shape)
 
     if labels is None:
         labels = molgrid.MGrid1f(batch_size)
@@ -166,7 +163,7 @@ if __name__ == '__main__':
     # Load some parameters from orginal model config
     config = Path(args.model_dir).parents[1] / 'config'
     recmap, ligmap = None, None
-    gridmaker_args = {}
+    binary_mask = False
     with open(config, 'r') as f:
         for line in f.readlines():
             chunks = line.strip().split()
@@ -178,33 +175,14 @@ if __name__ == '__main__':
                 elif param == 'ligmap':
                     ligmap = value
                 elif param == 'dimension':
-                    gridmaker_args['dimension'] = float(value)
+                    dimension = float(value)
                 elif param == 'resolution':
-                    gridmaker_args['resolution'] = float(value)
+                    resolution = float(value)
                 elif param == 'binary_mask':
                     if value == 'True':
-                        gridmaker_args['binary'] = True
+                        binary_mask = True
 
     molgrid.set_gpu_enabled(1 - int(args.use_cpu))
-
-    # Setup libmolgrid to feed Examples into tensorflow objects
-    example_provider_kwargs = {
-        'data_root': str(Path(args.data_root).expanduser()), 'balanced': False,
-        'shuffle': False, 'cache_structs': False
-    }
-    if recmap is not None and ligmap is not None:
-        rec_typer = molgrid.FileMappedGninaTyper(recmap)
-        lig_typer = molgrid.FileMappedGninaTyper(ligmap)
-        e = molgrid.ExampleProvider(
-            rec_typer, lig_typer, **example_provider_kwargs)
-    else:
-        e = molgrid.ExampleProvider(**example_provider_kwargs)
-    e.populate(str(args.test))
-
-    gmaker = molgrid.GridMaker(**gridmaker_args)
-    dims = gmaker.grid_dimensions(e.num_types())
-    tensor_shape = (args.batch_size,) + dims
-    input_tensor = molgrid.MGrid5f(*tensor_shape)
 
     model = tf.keras.models.load_model(
         args.model_dir,
@@ -221,6 +199,8 @@ if __name__ == '__main__':
             'close_zero_mae': close_zero_mae
         }
     )
+
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size,
-        gmaker=gmaker, input_tensor=input_tensor, ligmap=ligmap, recmap=recmap)
+        dimension=dimension, resolution=resolution, ligmap=ligmap,
+        recmap=recmap, binary_mask=binary_mask)
