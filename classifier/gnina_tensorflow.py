@@ -10,6 +10,7 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 """
 
 import argparse
+import gc
 import os
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ import molgrid
 import numpy as np
 from tensorflow.keras.utils import plot_model
 
-from autoencoder.parse_command_line_args import pickup
+from autoencoder.parse_command_line_args import pickup, LoadConfigTrain
 from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
     define_densefs_model
@@ -31,12 +32,21 @@ def main():
     # Create and parse command line args
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        'load_model', type=str, action=LoadConfigTrain, nargs='?',
+        help='Load saved keras model. If specified, this should be the '
+             'directory containing the assets of a saved classifier. '
+             'If specified, the options are loaded from the config file '
+             'saved when the original model was trained; any options '
+             'specified in the command line will override the options '
+             'loaded from the config file.')
+    parser.add_argument('--resume', action='store_true')
+    parser.add_argument(
         '--data_root', '-r', type=str, required=False, default=Path.home(),
         help=('Path relative to which all paths in specified types files will '
               'be taken')
     )
     parser.add_argument(
-        '--train', type=str, required=True,
+        '--train', type=str, required=False,
         help=('Types file containing training examples including label, '
               'receptor path and ligand path')
     )
@@ -104,8 +114,11 @@ def main():
               'interval [0, 1e7)'))
     args = parser.parse_args()
 
+    for item in vars(args):
+        print(item, getattr(args, item))
+
     # We need to train or test
-    if not (args.train or args.test):
+    if not (args.train or args.test) and not args.resume:
         raise RuntimeError('Please specify at least one of --train or '
                            '--test')
     else:
@@ -126,7 +139,10 @@ def main():
     else:
         folder = args.name
 
-    args.save_path = Path(args.save_path, folder).resolve()
+    if args.load_model is None:
+        args.save_path = Path(args.save_path, folder).resolve()
+    else:
+        args.save_path = Path(args.save_path).resolve()
 
     # Use cpu rather than gpu if specified
     molgrid.set_gpu_enabled(1 - args.use_cpu)
@@ -166,12 +182,31 @@ def main():
     checkpoints_dir = args.save_path / 'checkpoints'
     checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
+    barred_args = ['resume']
+    losses_string = ''
+    starting_iter = 0
+    if args.resume:
+        if not args.load_model:
+            raise RuntimeError(
+                '--resume must be used in conjunction with load_model')
+        log_fname = Path(
+            args.load_model).expanduser().parents[1] / 'loss_log.txt'
+        starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
+        with open(log_fname, 'r') as f:
+            losses_string = '\n'.join(
+                f.read().split('\n')[:starting_iter + 1]) + '\n'
+        barred_args.append('load_model')
+
     # We are ready to define our model and train
     losses = []
-    if args.densefs:
-        model = define_densefs_model(dims, bc=args.use_densenet_bc)
+
+    if args.load_model is not None:  # Load a model
+        model = pickup(args.load_model)
     else:
-        model = define_baseline_model(dims)
+        if args.densefs:
+            model = define_densefs_model(dims, bc=args.use_densenet_bc)
+        else:
+            model = define_baseline_model(dims)
 
     arg_str = '\n'.join(
         ['{0} {1}'.format(arg, getattr(args, arg)) for arg in vars(args)])
@@ -182,11 +217,9 @@ def main():
         f.write(arg_str)
     print(arg_str)
 
-    losses_string = ''
-    loss_history_fname = Path(
-        args.save_path, 'loss_history_{}.txt'.format(model_str.lower()))
+    loss_history_fname = Path(args.save_path, 'loss_log.txt')
     start_time = time.time()
-    for iteration in range(args.iterations):
+    for iteration in range(starting_iter, args.iterations):
         if (not (iteration + 1) % args.save_interval and
                 iteration < args.iterations - 1):
             checkpoint_path = Path(
@@ -209,7 +242,8 @@ def main():
             f.write(losses_string)
 
         time_elapsed = time.time() - start_time
-        time_per_iter = time_elapsed / (iteration + 1)  # Let's not div0
+        # Let's not div0
+        time_per_iter = time_elapsed / (iteration - starting_iter + 1)
         time_remaining = time_per_iter * (args.iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
