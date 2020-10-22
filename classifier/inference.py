@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     # Load some parameters from orginal model config
     config = Path(args.model_dir).parents[1] / 'config'
-    recmap, ligmap = None, None
+    recmap, ligmap, autoencoder_path = None, None, None
     binary_mask = False
     with open(config, 'r') as f:
         for line in f.readlines():
@@ -181,26 +181,37 @@ if __name__ == '__main__':
                 elif param == 'binary_mask':
                     if value == 'True':
                         binary_mask = True
+                elif param == 'autoencoder':
+                    autoencoder_path = value
 
     molgrid.set_gpu_enabled(1 - int(args.use_cpu))
+    custom_objects = {
+        'zero_mse': zero_mse,
+        'nonzero_mse': nonzero_mse,
+        'composite_mse': composite_mse,
+        'nonzero_mae': nonzero_mae,
+        'zero_mae': zero_mae,
+        'trimmed_nonzero_mae': trimmed_nonzero_mae,
+        'trimmed_zero_mae': trimmed_zero_mae,
+        'close_mae': close_mae,
+        'close_nonzero_mae': close_nonzero_mae,
+        'close_zero_mae': close_zero_mae
+    }
 
     model = tf.keras.models.load_model(
         args.model_dir,
-        custom_objects={
-            'zero_mse': zero_mse,
-            'nonzero_mse': nonzero_mse,
-            'composite_mse': composite_mse,
-            'nonzero_mae': nonzero_mae,
-            'zero_mae': zero_mae,
-            'trimmed_nonzero_mae': trimmed_nonzero_mae,
-            'trimmed_zero_mae': trimmed_zero_mae,
-            'close_mae': close_mae,
-            'close_nonzero_mae': close_nonzero_mae,
-            'close_zero_mae': close_zero_mae
-        }
+        custom_objects=custom_objects
     )
+
+    if autoencoder_path is not None:
+        autoencoder = tf.keras.models.load_model(
+            autoencoder_path,
+            custom_objects=custom_objects
+        )
+    else:
+        autoencoder = None
 
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size,
         dimension=dimension, resolution=resolution, ligmap=ligmap,
-        recmap=recmap, binary_mask=binary_mask)
+        recmap=recmap, binary_mask=binary_mask, autoencoder=autoencoder)
