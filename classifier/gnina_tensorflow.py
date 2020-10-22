@@ -154,7 +154,8 @@ def main():
     # If specified, use autoencoder reconstructions to train/test
     autoencoder = None
     if isinstance(args.autoencoder, str):
-        autoencoder = pickup(args.autoencoder)
+        if Path(args.autoencoder).is_dir():
+            autoencoder = pickup(args.autoencoder)
 
     gap = 100  # Window to average training loss over (in batches)
 
