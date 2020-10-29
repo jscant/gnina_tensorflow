@@ -72,7 +72,7 @@ def get_dims(dimension, resolution, ligmap, recmap):
             with open(fname, 'r') as f:
                 c = sum([1 for line in f.readlines() if len(line)])
         channels += c
-    length = int((dimension + 1) // resolution)
+    length = int(dimension // resolution) + 1
     return channels, length, length, length
 
 
