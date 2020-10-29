@@ -93,7 +93,8 @@ class AutoEncoderBase(tf.keras.Model):
 
         if metric_distance_threshold > 0:
             self.add_metric(close_mae(self.input_image, self.reconstruction,
-                                      self.distances, metric_distance_threshold),
+                                      self.distances,
+                                      metric_distance_threshold),
                             name='close_mae')
             self.add_metric(
                 close_nonzero_mae(
