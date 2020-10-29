@@ -78,7 +78,7 @@ class ResBlock(tf.keras.layers.Layer):
 
         self.add = layers.Add(name=name + '_add')
 
-    def __call__(self, inputs):
+    def call(self, inputs, **kwargs):
         """Overloaded function; see base class (tf.keras.layers.Layer).
 
         Returns:
@@ -157,7 +157,7 @@ class InverseResBlock(tf.keras.layers.Layer):
 
         self.add = layers.Add(name=name + '_add')
 
-    def __call__(self, inputs):
+    def call(self, inputs, **kwargs):
         """Overloaded function; see base class (tf.keras.layers.Layer).
 
         Returns:
