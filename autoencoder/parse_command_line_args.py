@@ -1,8 +1,6 @@
 import argparse
 from pathlib import Path
 
-import tensorflow as tf
-
 from autoencoder import autoencoder_definitions
 
 
@@ -52,6 +50,8 @@ class LoadConfigTrain(argparse.Action):
                     setattr(
                         namespace, chunks[0],
                         [False, True][chunks[1] == 'True'])
+                elif chunks[1] == 'None':
+                    setattr(namespace, chunks[0], None)
                 elif chunks[0] == 'name':
                     setattr(namespace, *chunks)
                 elif chunks[0] not in ['load_model',
@@ -104,52 +104,13 @@ class LoadConfigTest(argparse.Action):
         setattr(namespace, 'load_model', values)
 
 
-def pickup(path):
-    """Loads saved autoencoder.
-
-    Arguments:
-        path: location of saved weights and architecture
-
-    Returns:
-        AutoEncoderBase-derived object initialised with weights from saved
-        checkpoint.
-    """
-
-    ae = tf.keras.models.load_model(
-        path,
-        custom_objects={
-            'zero_mse': autoencoder_definitions.zero_mse,
-            'nonzero_mse': autoencoder_definitions.nonzero_mse,
-            'composite_mse': autoencoder_definitions.composite_mse,
-            'nonzero_mae': autoencoder_definitions.nonzero_mae,
-            'zero_mae': autoencoder_definitions.zero_mae,
-            'trimmed_nonzero_mae': autoencoder_definitions.trimmed_nonzero_mae,
-            'trimmed_zero_mae': autoencoder_definitions.trimmed_zero_mae,
-            'close_mae': autoencoder_definitions.close_mae,
-            'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
-            'close_zero_mae': autoencoder_definitions.close_zero_mae,
-            'proximity_mse': autoencoder_definitions.proximity_mse
-        }
-    )
-
-    # Bug with add_loss puts empty dict at the end of model._layers which
-    # interferes with some functionality (such as
-    # tf.keras.utils.plot_model)
-    # noinspection PyProtectedMember
-    ae._layers = [layer for layer in ae._layers if isinstance(
-        layer, tf.keras.layers.Layer)]
-    return ae
-
-
 def parse_command_line_args(test_or_train='train'):
     """Parse command line args and return as dict.
 
-    Returns a namespace containing all args, default or otherwise; if 'pickup'
-    is specified, as many args as are contained in the config file for that
-    (partially) trained model are loaded, otherwise defaults are given.
-    Command line args override args found in the config of model found in
-    'pickup' directory. Also returns either None (no loaded model) or a
-    keras loaded model (if loaded model is specified).
+    Returns a namespace containing all args, default or otherwise;
+    Command line args override args found in the config of model specified in
+    'load_model' arg. Also returns either None (no loaded model) or a keras
+    loaded model (if loaded model is specified).
     """
 
     parser = argparse.ArgumentParser()
@@ -261,9 +222,14 @@ def parse_command_line_args(test_or_train='train'):
     parser.add_argument('--name', type=str, required=False)
     args = parser.parse_args()
 
+    # If we are loading, return the correct class of autoencoder else None
     autoencoder = None
     if args.load_model is not None:  # Load a model
-        autoencoder = pickup(args.load_model)
+        autoencoder = {
+            'multi': autoencoder_definitions.MultiLayerAutoEncoder,
+            'dense': autoencoder_definitions.DenseAutoEncoder,
+            'single': autoencoder_definitions.SingleLayerAutoEncoder
+        }[args.model]
     elif test_or_train == 'test':
         raise RuntimeError(
             'Please specify a model to use to calculate encodings.')

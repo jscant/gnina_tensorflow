@@ -25,7 +25,7 @@ from utilities.gnina_functions import Timer, get_dims
 
 def main():
     # Parse and sanitise command line args
-    ae, args = parse_command_line_args.parse_command_line_args('train')
+    ae_class, args = parse_command_line_args.parse_command_line_args('train')
 
     # There really are a lot of these and they are not useful to scientists
     # using this software. Only log errors (unless verbose)
@@ -34,11 +34,10 @@ def main():
         deprecation._PRINT_DEPRECATION_WARNINGS = False
 
     # For use later when defining model
-    architectures = {'single': autoencoder_definitions.SingleLayerAutoEncoder,
-                     'dense': autoencoder_definitions.DenseAutoEncoder,
-                     'multi': autoencoder_definitions.MultiLayerAutoEncoder,
-                     'res': autoencoder_definitions.ResidualAutoEncoder}
-
+    architectures = {
+        'single': autoencoder_definitions.SingleLayerAutoEncoder,
+        'multi': autoencoder_definitions.MultiLayerAutoEncoder,
+        'dense': autoencoder_definitions.DenseAutoEncoder}
     molgrid.set_gpu_enabled(1 - args.use_cpu)
 
     # Use learning rate schedule or single learning rate
@@ -85,6 +84,53 @@ def main():
     barred_args = ['resume']
     loss_log = None
     starting_iter = 0
+
+    arg_str = '\n'.join(
+        ['{0} {1}'.format(param, argument) for param, argument
+         in vars(args).items() if param not in barred_args]
+    )
+
+    save_path = Path(args.save_path, args.name).expanduser().resolve()
+
+    if args.momentum > 0 and \
+            args.optimiser.lower() not in ['sgd', 'rmsprop', 'sgdw']:
+        raise RuntimeError(
+            'Momentum only used for RMSProp and SGD optimisers.')
+    if not Path(args.train).exists():
+        raise RuntimeError('{} does not exist.'.format(args.train))
+
+    Path(save_path, 'checkpoints').mkdir(parents=True, exist_ok=True)
+
+    arg_str += '\nabsolute_save_path {}\n'.format(save_path)
+    print(arg_str)
+
+    if not args.resume:
+        with open(save_path / 'config', 'w') as f:
+            f.write(arg_str)
+
+    tf.keras.backend.clear_session()
+
+    if ae_class is None:  # No loaded model
+        ae_class = architectures[args.model]
+
+    input_dims = get_dims(
+        args.dimension, args.resolution, args.ligmap, args.recmap)
+    ae = ae_class(
+        input_dims, data_root=args.data_root, train_types=args.train,
+        batch_size=args.batch_size, dimension=args.dimension,
+        resolution=args.resolution, ligmap=args.ligmap, recmap=args.recmap,
+        binary_mask=args.binary_mask, latent_size=args.encoding_size,
+        optimiser=args.optimiser, loss=args.loss,
+        hidden_activation=args.hidden_activation,
+        final_activation=args.final_activation,
+        metric_distance_threshold=args.metric_distance_threshold,
+        learning_rate_schedule=lrs, **opt_args
+    )
+
+    if args.load_model is not None:
+        ae(np.random.rand(args.batch_size, *input_dims).astype('float32'))
+        ae.load_weights(args.load_model)
+
     if args.resume:
         if not args.load_model:
             raise RuntimeError(
@@ -106,73 +152,18 @@ def main():
                 f.read().split('\n')[:starting_iter + 1]) + '\n'
         barred_args.append('load_model')
 
-    arg_str = '\n'.join(
-        [
-            '{0} {1}'.format(param, argument)
-            for param, argument
-            in vars(args).items()
-            if param not in barred_args
-        ]
-    )
-
-    save_path = Path(args.save_path, args.name).expanduser().resolve()
-
-    if args.momentum > 0 and args.optimiser.lower() not in ['sgd', 'rmsprop',
-                                                            'sgdw']:
-        raise RuntimeError(
-            'Momentum only used for RMSProp and SGD optimisers.')
-    if not Path(args.train).exists():
-        raise RuntimeError('{} does not exist.'.format(args.train))
-
-    Path(save_path, 'checkpoints').mkdir(parents=True, exist_ok=True)
-
-    arg_str += '\nabsolute_save_path {}\n'.format(save_path)
-    print(arg_str)
-
-    if not args.resume:
-        with open(save_path / 'config', 'w') as f:
-            f.write(arg_str)
-
-    tf.keras.backend.clear_session()
-
-    if ae is None:  # No loaded model
-        ae = architectures[args.model](
-            get_dims(args.dimension, args.resolution, args.ligmap, args.recmap),
-            encoding_size=args.encoding_size,
-            optimiser=args.optimiser,
-            loss=args.loss,
-            hidden_activation=args.hidden_activation,
-            final_activation=args.final_activation,
-            metric_distance_threshold=args.metric_distance_threshold,
-            learning_rate_schedule=lrs,
-            **opt_args)
-    else:
-        ae.learning_rate_schedule = lrs
-
     ae.summary()
-
-    if args.loss not in ['composite_mse', 'distance_mse']:
-        tf.keras.utils.plot_model(
-            ae, save_path / 'model.png', show_shapes=True)
+    ae.plot(save_path / 'model.png', show_shapes=True)
 
     losses, nonzero_losses, zero_losses = train(
         ae,
-        data_root=args.data_root,
-        train_types=args.train,
         iterations=args.iterations,
-        batch_size=args.batch_size,
         save_path=save_path,
-        dimension=args.dimension,
-        resolution=args.resolution,
         loss_fn=args.loss,
-        ligmap=args.ligmap,
-        recmap=args.recmap,
         save_interval=args.save_interval,
-        metric_distance_threshold=args.metric_distance_threshold,
         overwrite_checkpoints=args.overwrite_checkpoints,
-        binary_mask=args.binary_mask,
         loss_log=loss_log,
-        starting_iter=starting_iter
+        starting_iter=starting_iter,
     )
     print('\nFinished training.')
 

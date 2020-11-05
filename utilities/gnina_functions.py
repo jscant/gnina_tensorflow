@@ -4,7 +4,7 @@ Created on Fri Jul 10 14:47:44 2020
 @author: scantleb
 @brief: Utility functions for use in various machine learning models
 """
-
+import argparse
 import math
 import shutil
 import time
@@ -12,6 +12,9 @@ from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
+
+from autoencoder import autoencoder_definitions
+from autoencoder.parse_command_line_args import LoadConfigTrain
 
 
 class Timer:
@@ -33,6 +36,78 @@ class Timer:
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
+
+
+def load_autoencoder(weights_path, input_dims, batch_size):
+    """Initialise, instantiate and load the weights for an autoencoder.
+
+    Load the weights of a saved autoencoder. Weights (not the full model)
+    should be saved in the h5 format. Note that the internal state of the
+    optimiser (such as the momentum) will be reset to their initial conditions,
+    with the exception of the learning rate which will resume according to
+    any learning rate schedule specified.
+
+    This is required for models constructed as subclasses of tf.keras.Model.
+    For autoencoders constructed using the functional API, it is best to use
+    tf.keras.Model.save() and tf.keras.model.load().
+
+    Arguments:
+        weights_path: path to file containing weights saved in h5 format
+        input_dims: dimensions of gnina input (not including batch size)
+        batch_size: number of examples in each batch
+
+    Returns:
+        Autoencoder ready for training or inference, loaded with the weights
+        specified in the
+    """
+    if Path(weights_path).is_file():
+        ae_ns = argparse.Namespace()
+        autoencoder_parser = argparse.ArgumentParser()
+        LoadConfigTrain(autoencoder_parser, ae_ns, weights_path)(
+            autoencoder_parser, ae_ns, weights_path)
+
+        print('Autoencoder parameters:')
+        for param, value in vars(ae_ns).items():
+            print(param + ':', value)
+        print()
+
+        ae_class = {
+            'multi': autoencoder_definitions.MultiLayerAutoEncoder,
+            'dense': autoencoder_definitions.DenseAutoEncoder,
+            'single': autoencoder_definitions.SingleLayerAutoEncoder
+        }[ae_ns.model]
+        if ae_ns.learning_rate_schedule is None:
+            opt_args = {}
+        else:
+            opt_args = {'weight_decay': 1e-4}
+        autoencoder = ae_class(
+            input_dims, data_root=ae_ns.data_root,
+            train_types=ae_ns.train,
+            batch_size=ae_ns.batch_size,
+            dimension=ae_ns.dimension,
+            resolution=ae_ns.resolution,
+            ligmap=ae_ns.ligmap,
+            recmap=ae_ns.recmap,
+            binary_mask=ae_ns.binary_mask,
+            latent_size=ae_ns.encoding_size,
+            optimiser=ae_ns.optimiser,
+            loss=ae_ns.loss,
+            hidden_activation=ae_ns.hidden_activation,
+            final_activation=ae_ns.final_activation,
+            metric_distance_threshold=ae_ns.metric_distance_threshold,
+            learning_rate_schedule=None, **opt_args
+        )
+
+        # We have to call the model once before loading weights so that we
+        # can ascertain the correct layer input and output dimensions.
+        autoencoder.summary()
+        autoencoder(
+            np.random.rand(batch_size, *input_dims).astype('float32'),
+            training=False)
+        autoencoder.load_weights(weights_path)
+    else:
+        raise RuntimeError('{} does not exist'.format(weights_path))
+    return autoencoder
 
 
 def wipe_directory(directory):
@@ -170,26 +245,11 @@ def process_batch(model, example_provider, gmaker, input_tensor,
     batch = example_provider.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=train)
 
-    input_numpy = input_tensor.tonumpy()
+    gnina_input = input_tensor.tonumpy()
     tf.keras.backend.clear_session()
 
     if autoencoder is not None:
-        inputs = {'input_image': input_numpy}
-        try:
-            autoencoder.get_layer('frac')
-        except ValueError:
-            pass
-        else:
-            inputs.update({'frac': tf.constant(1., shape=(batch_size,))})
-        try:
-            autoencoder.get_layer('distances')
-        except ValueError:
-            pass
-        else:
-            inputs.update({'distances': np.zeros_like(input_numpy)})
-        gnina_input, _ = autoencoder.predict_on_batch(inputs)
-    else:
-        gnina_input = input_numpy
+        gnina_input = autoencoder(gnina_input, training=False)
 
     if labels_tensor is None:  # We don't know labels; just return predictions
         return model.predict_on_batch(gnina_input)

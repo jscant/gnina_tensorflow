@@ -78,3 +78,32 @@ class ConvBlock(layers.Layer):
         x = self.conv(x)
         x = self.act_0(x)
         return self.concat([inputs, x])
+
+
+class InverseTransitionBlock(tf.keras.layers.Layer):
+
+    def __init__(self, input_shape, reduction, name, activation='relu',
+                 **kwargs):
+        super().__init__(name=name, **kwargs)
+        conv_initialiser = tf.keras.initializers.HeNormal()
+        self._input_shape = input_shape
+        self.act_0 = next(generate_activation_layers(
+            '{0}_{1}'.format(name, activation), activation))
+        self.bn = layers.BatchNormalization(
+            axis=1, epsilon=1.001e-5,
+            moving_mean_initializer=tf.constant_initializer(0.999),
+            name=name + '_bn')
+        self.conv = layers.Conv3D(
+            int(reduction * self._input_shape[1]), 1,
+            data_format='channels_first', use_bias=False,
+            kernel_initializer=conv_initialiser,
+            name=name + '_{}'.format(activation))
+        self.upsample = layers.UpSampling3D(
+            2, name=name + '_upsample', data_format='channels_first')
+
+    def call(self, inputs, **kwargs):
+        x = self.bn(inputs)
+        x = self.conv(x)
+        x = self.act_0(x)
+        x = self.upsample(x)
+        return x

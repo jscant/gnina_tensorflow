@@ -17,14 +17,16 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
+import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 
-from autoencoder.parse_command_line_args import pickup, LoadConfigTrain
+from autoencoder import autoencoder_definitions
+from autoencoder.parse_command_line_args import LoadConfigTrain
 from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
     define_densefs_model
 from utilities.gnina_functions import process_batch, print_with_overwrite, \
-    format_time
+    format_time, get_dims, load_autoencoder
 
 
 def main():
@@ -154,8 +156,10 @@ def main():
     # If specified, use autoencoder reconstructions to train/test
     autoencoder = None
     if isinstance(args.autoencoder, str):
-        if Path(args.autoencoder).is_dir():
-            autoencoder = pickup(args.autoencoder)
+        input_dims = get_dims(
+            args.dimension, args.resolution, args.ligmap, args.recmap)
+        autoencoder = load_autoencoder(
+            args.autoencoder, input_dims, args.batch_size)
 
     gap = 100  # Window to average training loss over (in batches)
 
@@ -206,7 +210,7 @@ def main():
     losses = []
 
     if args.load_model is not None:  # Load a model
-        model = pickup(args.load_model)
+        model = tf.keras.models.load_model(args.load_model)
     else:
         if args.densefs:
             model = define_densefs_model(dims, bc=args.use_densenet_bc)
