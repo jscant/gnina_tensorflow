@@ -202,6 +202,9 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument(
             '--verbose', action='store_true',
             help='Do not suppress deprecation messages and other tf warnings')
+        parser.add_argument('--adversarial', action='store_true',
+                            help='Use convolutional neural network to check '
+                                 'how realistic reconstructions are.')
     else:
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTest, nargs='?',

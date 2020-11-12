@@ -6,7 +6,6 @@ Created on Tue Jun 23 14:45:32 2020
 gnina inputs.
 """
 
-import os
 from pathlib import Path
 
 import molgrid
@@ -14,30 +13,18 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_addons as tfa
 from matplotlib import pyplot as plt
-from tensorflow.python.util import deprecation
 
-from autoencoder import autoencoder_definitions, parse_command_line_args, \
+from autoencoder import parse_command_line_args, \
     schedules
 from autoencoder.calculate_encodings import calculate_encodings
 from autoencoder.train import train
-from utilities.gnina_functions import Timer, get_dims
+from utilities.gnina_functions import Timer, get_dims, load_autoencoder
 
 
 def main():
     # Parse and sanitise command line args
     ae_class, args = parse_command_line_args.parse_command_line_args('train')
 
-    # There really are a lot of these and they are not useful to scientists
-    # using this software. Only log errors (unless verbose)
-    if not args.verbose:
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-        deprecation._PRINT_DEPRECATION_WARNINGS = False
-
-    # For use later when defining model
-    architectures = {
-        'single': autoencoder_definitions.SingleLayerAutoEncoder,
-        'multi': autoencoder_definitions.MultiLayerAutoEncoder,
-        'dense': autoencoder_definitions.DenseAutoEncoder}
     molgrid.set_gpu_enabled(1 - args.use_cpu)
 
     # Use learning rate schedule or single learning rate
@@ -108,24 +95,12 @@ def main():
         with open(save_path / 'config', 'w') as f:
             f.write(arg_str)
 
-    tf.keras.backend.clear_session()
-
-    if ae_class is None:  # No loaded model
-        ae_class = architectures[args.model]
+    # tf.keras.backend.clear_session()
 
     input_dims = get_dims(
         args.dimension, args.resolution, args.ligmap, args.recmap)
-    ae = ae_class(
-        input_dims, data_root=args.data_root, train_types=args.train,
-        batch_size=args.batch_size, dimension=args.dimension,
-        resolution=args.resolution, ligmap=args.ligmap, recmap=args.recmap,
-        binary_mask=args.binary_mask, latent_size=args.encoding_size,
-        optimiser=args.optimiser, loss=args.loss,
-        hidden_activation=args.hidden_activation,
-        final_activation=args.final_activation,
-        metric_distance_threshold=args.metric_distance_threshold,
-        learning_rate_schedule=lrs, **opt_args
-    )
+    ae = load_autoencoder(args, args.load_model, input_dims,
+                          lrs, opt_args)
 
     if args.load_model is not None:
         ae(np.random.rand(args.batch_size, *input_dims).astype('float32'))
@@ -146,7 +121,8 @@ def main():
         )
         log_fname = Path(
             args.load_model).expanduser().parents[1] / 'loss_log.txt'
-        starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
+        starting_iter = int(str(
+            Path(args.load_model).name).split('_')[-1].split('.')[0])
         with open(log_fname, 'r') as f:
             loss_log = '\n'.join(
                 f.read().split('\n')[:starting_iter + 1]) + '\n'

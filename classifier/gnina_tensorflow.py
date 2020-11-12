@@ -20,13 +20,12 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 
-from autoencoder import autoencoder_definitions
 from autoencoder.parse_command_line_args import LoadConfigTrain
 from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
-    define_densefs_model
-from utilities.gnina_functions import process_batch, print_with_overwrite, \
-    format_time, get_dims, load_autoencoder
+    DenseFS
+from utilities.gnina_functions import process_batch, format_time, get_dims, \
+    load_autoencoder, print_with_overwrite
 
 
 def main():
@@ -158,8 +157,8 @@ def main():
     if isinstance(args.autoencoder, str):
         input_dims = get_dims(
             args.dimension, args.resolution, args.ligmap, args.recmap)
-        autoencoder = load_autoencoder(
-            args.autoencoder, input_dims, args.batch_size)
+        autoencoder = load_autoencoder(args, args.autoencoder, input_dims,
+                              None, {})
 
     gap = 100  # Window to average training loss over (in batches)
 
@@ -200,7 +199,8 @@ def main():
                 '--resume must be used in conjunction with load_model')
         log_fname = Path(
             args.load_model).expanduser().parents[1] / 'loss_log.txt'
-        starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
+        starting_iter = int(str(
+            Path(args.load_model).name).split('_')[-1].split('.')[0])
         with open(log_fname, 'r') as f:
             losses_string = '\n'.join(
                 f.read().split('\n')[:starting_iter + 1]) + '\n'
@@ -213,7 +213,8 @@ def main():
         model = tf.keras.models.load_model(args.load_model)
     else:
         if args.densefs:
-            model = define_densefs_model(dims, bc=args.use_densenet_bc)
+            # model = define_densefs_model(dims, bc=args.use_densenet_bc)
+            model = DenseFS(dims)
         else:
             model = define_baseline_model(dims)
 
@@ -243,8 +244,7 @@ def main():
                              train=True, autoencoder=autoencoder)
 
         # Save losses to disk
-        if not isinstance(loss, float):
-            loss = loss[0]
+
         losses.append(loss)
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(loss_history_fname, 'w') as f:
@@ -260,15 +260,16 @@ def main():
             print('\n')
 
         console_output = (
-            'Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | Time remaining: {4}').format(
+            'Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | '
+            'Time remaining: {4}').format(
             iteration, args.iterations, loss, format_time(time_elapsed),
             formatted_eta)
-        print_with_overwrite(console_output)
+        #print_with_overwrite(console_output)
 
     # Save model for later inference
     checkpoint_path = args.save_path / 'checkpoints' / 'final_model_{}'.format(
         args.iterations)
-    model.save(checkpoint_path)
+    # model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
     losses = [np.mean(losses[window:window + gap])

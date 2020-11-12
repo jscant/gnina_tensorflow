@@ -29,13 +29,13 @@ class TransitionBlock(layers.Layer):
         self.max_pool = layers.MaxPooling3D(2, strides=2, name=name + '_pool',
                                             data_format='channels_first')
 
-    def call(self, inputs, **kwargs):
-        x = self.bn(inputs)
+    def call(self, inputs, training=None, mask=None):
+        x = self.bn(inputs, training=training)
         if self.final:
             return x
-        x = self.conv(x)
-        x = self.act_0(x)
-        return self.max_pool(x)
+        x = self.conv(x, training=training)
+        x = self.act_0(x, training=training)
+        return self.max_pool(x, training=training)
 
 
 class DenseBlock(layers.Layer):
@@ -47,10 +47,10 @@ class DenseBlock(layers.Layer):
             self.conv_blocks.append(ConvBlock(
                 16, '{0}_block_{1}'.format(name, i + 1), activation=activation))
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, training=None, mask=None):
         x = inputs
         for conv_block in self.conv_blocks:
-            x = conv_block(x)
+            x = conv_block(x, training=training, mask=mask)
         return x
 
 
@@ -73,11 +73,11 @@ class ConvBlock(layers.Layer):
             data_format='channels_first')
         self.concat = layers.Concatenate(axis=bn_axis, name=name + '_concat')
 
-    def call(self, inputs, **kwargs):
-        x = self.bn(inputs)
-        x = self.conv(x)
-        x = self.act_0(x)
-        return self.concat([inputs, x])
+    def call(self, inputs, training=None, mask=None):
+        x = self.bn(inputs, training=training)
+        x = self.conv(x, training=training)
+        x = self.act_0(x, training=training)
+        return self.concat([inputs, x], training=training)
 
 
 class InverseTransitionBlock(tf.keras.layers.Layer):
@@ -101,9 +101,9 @@ class InverseTransitionBlock(tf.keras.layers.Layer):
         self.upsample = layers.UpSampling3D(
             2, name=name + '_upsample', data_format='channels_first')
 
-    def call(self, inputs, **kwargs):
-        x = self.bn(inputs)
-        x = self.conv(x)
-        x = self.act_0(x)
-        x = self.upsample(x)
+    def call(self, inputs, training=None, mask=None):
+        x = self.bn(inputs, training=training)
+        x = self.conv(x, training=training)
+        x = self.act_0(x, training=training)
+        x = self.upsample(x, training=training)
         return x

@@ -17,9 +17,84 @@ import tensorflow_addons as tfa
 from gnina_tensorflow_cpp import calculate_distances as cd
 from tensorflow.keras import layers
 
+from layers import dense_callable
 from layers.dense_callable import DenseBlock, TransitionBlock, \
     InverseTransitionBlock
 from layers.layer_functions import generate_activation_layers
+
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+epsilon = tf.constant(1e-6, dtype=tf.float32)
+
+
+class Discriminator(tf.keras.Model):
+
+    def __init__(self, input_shape):
+        super().__init__(name='discriminator')
+        self.disc = False
+        self.inp_shape = input_shape
+        self.input_image = layers.Input(
+            shape=input_shape, dtype=tf.float32, name='input_image')
+
+        self.mp_1 = layers.MaxPooling3D(
+            pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same',
+            data_format='channels_first')
+
+        self.conv_1 = layers.Conv3D(
+            32, 3, activation='relu', padding='same', use_bias=False,
+            data_format='channels_first')
+
+        self.dense_layers = []
+        self.dense_args = []
+
+        dummy = np.zeros((1,) + input_shape, dtype='float32')
+        x = self.mp_1(dummy)
+        x = self.conv_1(x)
+        for i in range(3):
+            final = True if i == 2 else False
+            self.dense_layers.append(
+                dense_callable.DenseBlock(4, 'db_{}'.format(i + 1)))
+            x = self.dense_layers[-1](x)
+            self.dense_layers.append(dense_callable.TransitionBlock(
+                x.shape, 1.0, 'tb_{}'.format(i + 1), final=final))
+
+        self.global_max = layers.GlobalMaxPooling3D(
+            data_format='channels_first')
+
+        self.probability = layers.Dense(
+            1, activation='sigmoid', name='probabilities')
+        self.opt = tf.keras.optimizers.SGD(
+            lr=0.01, momentum=True, nesterov=True)
+
+    def call(self, inputs, training=None, mask=None):
+        x = self.mp_1(inputs)
+        x = self.conv_1(x)
+        for layer in self.dense_layers:
+            x = layer(x)
+        x = self.global_max(x)
+        return self.probability(x)
+
+    def summary(self, line_length=None, positions=None, print_fn=None):
+        return self._model().summary(line_length, positions, print_fn)
+
+    def _model(self):
+        x = layers.Input(self.inp_shape)
+        return tf.keras.Model(inputs=[x], outputs=self.call(x))
+
+    def get_config(self):
+        pass
+
+
+def fake_quality(discriminator_predictions):
+    similarity = crossentropy(tf.ones_like(discriminator_predictions),
+                              discriminator_predictions)
+    return similarity
+
+
+def discriminator_loss_fn(real_predictions, fake_predictions):
+    real_loss = crossentropy(tf.ones_like(real_predictions), real_predictions)
+    fake_loss = crossentropy(tf.zeros_like(fake_predictions), fake_predictions)
+    return 0.5 * (real_loss + fake_loss)
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -30,7 +105,7 @@ class AutoEncoderBase(tf.keras.Model):
                  hidden_activation='sigmoid', final_activation='sigmoid',
                  learning_rate_schedule=None, metric_distance_threshold=-1.0,
                  ligmap=None, recmap=None, dimension=23.5, resolution=0.5,
-                 binary_mask=False, **opt_args):
+                 binary_mask=False, adversarial=False, **opt_args):
         """Setup and compilation of autoencoder.
 
         Arguments:
@@ -42,14 +117,15 @@ class AutoEncoderBase(tf.keras.Model):
             learning_rate_schedule: instance of class derived from
                 LearningRateSchedule which can be called with the iteration
                 number as an argument to give a learning rate
+            adversarial: use convolutional neural network discriminator to
+                force reconstructions to be more `realistic`
             opt_args: arguments for the keras optimiser (see keras
                 documentation)
         """
-        super().__init__()
+        super().__init__(name='Autoencoder')
         self.metric_distance_threshold = metric_distance_threshold
         self.resolution = resolution
         self.dimension = dimension
-        self.ratio = 1.0
         self.dims = dims
         self.latent_size = latent_size
         self.initialiser = tf.keras.initializers.HeNormal()  # weights init
@@ -57,6 +133,13 @@ class AutoEncoderBase(tf.keras.Model):
         self.encoding_layers = []
         self.decoding_layers = []
         self.batch_size = batch_size
+
+        if adversarial:
+            self.discriminator = Discriminator(dims)
+            self.get_gradients = self._get_gradients_adversarial
+        else:
+            self.discriminator = None
+            self.get_gradients = self._get_gradients
 
         # Abstract method should be implemented in child class
         self._construct_layers(
@@ -66,31 +149,38 @@ class AutoEncoderBase(tf.keras.Model):
             final_activation=final_activation)
 
         self.metrics_dict = {
-            'reconstruction': {name: func for name, func in zip(
-                ['mae', 'trimmed_nonzero_mae', 'trimmed_zero_mae', 'zero_mse',
-                 'nonzero_mse'],
-                [mae, trimmed_nonzero_mae, trimmed_zero_mae, zero_mse,
-                 nonzero_mse])}
+            'reconstruction': {
+                name: func for name, func in zip(
+                    ['mae', 'nonzero_mae', 'zero_mae'],
+                    [mae, nonzero_mae, zero_mae])
+            }
         }
 
-        loss_synonyms = {'mse': 'MeanSquaredError',
+        loss_synonyms = {'mean_squared_error': 'MeanSquaredError',
                          'mae': 'MeanAbsoluteError',
                          'binary_crossentropy': 'BinaryCrossentropy',
                          'categorical_crossentropy': 'CategoricalCrossentropy',
                          'hinge': 'Hinge',
                          'squared_hinge': 'SquaredHinge'}
 
-        loss_reduction = tf.keras.losses.Reduction.NONE
+        loss_reduction = tf.keras.losses.Reduction.AUTO
+        reduction_axis = [-4, -3, -2, -1]
+        self.loss = None
         if loss == 'mse':
             loss_class = SquaredError
         elif loss == 'distance_mse':
             loss_class = ProximityMse
         elif loss == 'composite_mse':
             loss_class = CompositeMse
+        elif loss == 'binary_crossentropy':
+            loss_class = BinaryCrossentropy
         else:
             loss_class = tf.keras.losses.get(
-                loss_synonyms[loss], loss).__class__
-        self.loss = loss_class(reduction=loss_reduction)
+                loss_synonyms.get(loss, loss)).__class__
+            self.loss = loss_class(reduction=loss_reduction)
+        if self.loss is None:
+            self.loss = loss_class(
+                reduction=loss_reduction, reduction_axis=reduction_axis)
 
         example_provider_kwargs = {
             'data_root': str(Path(data_root).expanduser()), 'balanced': False,
@@ -162,17 +252,104 @@ class AutoEncoderBase(tf.keras.Model):
                                   ' instantiated.')
 
     @tf.function
-    def train_step(self, ratio=1.0):
-        """Perform backpropagation on a single batch.
+    def _get_gradients(self, input_images):
+        with tf.GradientTape() as tape:
+            feature_vectors = [input_images]
+            if isinstance(self.loss, ProximityMse):
+                spatial_information = cd(
+                    self.rec_channels, np.asfortranarray(input_images),
+                    self.resolution)
+                feature_vectors.append(spatial_information)
 
+            reconstructions = self.call(input_images, training=True)
+
+            if len(feature_vectors) == 1:
+                reconstruction_loss = self.loss(
+                    feature_vectors[0], reconstructions)
+            else:
+                reconstruction_loss = self.loss(
+                    feature_vectors[0], reconstructions, feature_vectors[1])
+
+            metrics = {}
+            for name, func in self.metrics_dict.get('reconstruction').items():
+                metrics[name] = float(func(input_images, reconstructions))
+
+        grads = tape.gradient(
+            reconstruction_loss, self.trainable_variables)
+        self.opt.apply_gradients(zip(
+            grads, self.trainable_variables
+        ))
+        return reconstruction_loss, metrics
+
+    @tf.function
+    def _get_gradients_adversarial(self, input_images):
+        """
         The tf.function decoration causes this function to be executed in graph
         mode. This has the effect of a massive increase in the speed of training
         except when using the distance_mse loss option which is significantly
         slowed down.
+        """
+        with tf.GradientTape() as discriminator_tape, \
+                tf.GradientTape() as sim_tape, \
+                tf.GradientTape() as recon_tape:
+            feature_vectors = [input_images]
+            if isinstance(self.loss, ProximityMse):
+                spatial_information = cd(
+                    self.rec_channels, np.asfortranarray(input_images),
+                    self.resolution)
+                feature_vectors.append(spatial_information)
 
-        Arguments:
-            ratio: fraction of <nonzero_MSE/zero_MSE>, for use with
-                composite_mse loss function
+            reconstructions = self(input_images, training=True)
+
+            probabilities_real = self.discriminator(
+                input_images, training=True)
+            probabilities_fake = self.discriminator(
+                reconstructions, training=True)
+
+            if len(feature_vectors) == 1:
+                reconstruction_loss = self.loss(
+                    feature_vectors[0], reconstructions)
+            else:
+                reconstruction_loss = self.loss(
+                    feature_vectors[0], reconstructions, feature_vectors[1])
+
+            similarity_loss = tf.divide(fake_quality(
+                probabilities_fake), 1000)
+            discriminator_loss = discriminator_loss_fn(
+                probabilities_real, probabilities_fake)
+
+            metrics = {}
+            for name, func in self.metrics_dict.get('reconstruction').items():
+                metrics[name] = float(func(input_images, reconstructions))
+            metrics['discriminator_loss'] = discriminator_loss
+            metrics['similarity_loss'] = similarity_loss
+            metrics['real_probabilities'] = tf.reduce_mean(probabilities_real)
+            metrics['fake_probabilities'] = tf.reduce_mean(probabilities_fake)
+
+        gen_recon_grads = recon_tape.gradient(
+            reconstruction_loss, self.trainable_variables)
+
+        if reconstruction_loss < 0.005:
+            gen_fake_grads = sim_tape.gradient(
+                similarity_loss, self.trainable_variables
+            )
+            discriminator_grads = discriminator_tape.gradient(
+                discriminator_loss, self.discriminator.trainable_variables)
+            self.opt.apply_gradients(zip(
+                gen_fake_grads, self.trainable_variables
+            ))
+            self.discriminator.opt.apply_gradients(zip(
+                discriminator_grads, self.discriminator.trainable_variables
+            ))
+
+        self.opt.apply_gradients(zip(
+            gen_recon_grads, self.trainable_variables
+        ))
+
+        return reconstruction_loss, metrics
+
+    def training_step(self):
+        """Perform backpropagation on a single batch.
 
         Returns:
             Tuple: the reconstruction loss and a dictionary containing a mapping
@@ -183,42 +360,8 @@ class AutoEncoderBase(tf.keras.Model):
                             random_rotation=True)
         input_numpy = self.input_tensor.tonumpy()
         original_images = tf.convert_to_tensor(np.minimum(1.0, input_numpy))
-
-        with tf.GradientTape() as tape:
-            feature_vectors = [original_images]
-            if isinstance(self.loss, ProximityMse):
-                spatial_information = cd(
-                    self.rec_channels, np.asfortranarray(input_numpy),
-                    self.resolution)
-                feature_vectors.append(spatial_information)
-            elif isinstance(self.loss, CompositeMse):
-                feature_vectors.append(ratio)
-
-            reconstructions = self.call(
-                original_images, training=True)
-
-            if len(feature_vectors) == 1:
-                reconstruction_loss = self.loss(
-                    feature_vectors[0], reconstructions
-                )
-            else:
-                reconstruction_loss = self.loss(
-                    feature_vectors[0], reconstructions, feature_vectors[1]
-                )
-
-            metrics = {}
-            for name, func in self.metrics_dict.get('reconstruction').items():
-                if name.find('zero_mse') != -1:
-                    continue
-                metrics[name] = float(func(original_images, reconstructions))
-
-        grads = tape.gradient(
-            reconstruction_loss, self.trainable_variables
-        )
-        self.opt.apply_gradients(zip(
-            grads, self.trainable_variables
-        ))
-        return reconstruction_loss, metrics
+        self.iteration += 1
+        return self.get_gradients(original_images)
 
     def get_config(self):
         """Overloaded method; see base class (tf.keras.Model)."""
@@ -227,7 +370,6 @@ class AutoEncoderBase(tf.keras.Model):
             {'metric_distance_threshold': self.metric_distance_threshold,
              'resolution': self.resolution,
              'dimension': self.dimension,
-             'ratio': self.ratio,
              'dims': self.dims,
              'latent_size': self.latent_size,
              'initialiser': self.initialiser,
@@ -236,7 +378,7 @@ class AutoEncoderBase(tf.keras.Model):
              'decoding_layers': self.decoding_layers,
              'batch_size': self.batch_size,
              'mae': mae,
-             'trimmed_nonzer_mae': trimmed_nonzero_mae,
+             'trimmed_nonzero_mae': trimmed_nonzero_mae,
              'zero_mse': zero_mse,
              'nonzero_mse': nonzero_mse,
              '_construct_layers': self._construct_layers,
@@ -247,7 +389,8 @@ class AutoEncoderBase(tf.keras.Model):
              'input_tensor': self.input_tensor,
              'iteration': self.iteration,
              'opt': self.opt,
-             'train_step': self.train_step}
+             'train_step': self.train_step,
+             '_get_gradients': self._get_gradients}
         )
         return config
 
@@ -329,17 +472,22 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
                      'use_bias': False,
                      'kernel_initializer': self.initialiser}
 
-        self.encoding_layers.append(layers.Conv3D(64, 3, 2, **conv_args))
+        self.encoding_layers.append(layers.Conv3D(128, 3, 2, **conv_args))
         self.encoding_layers.append(next(conv_activation))
         self.encoding_layers.append(bn())
 
-        self.encoding_layers.append(layers.Conv3D(64, 3, 2, **conv_args))
+        self.encoding_layers.append(layers.Conv3D(256, 3, 2, **conv_args))
         self.encoding_layers.append(next(conv_activation))
         self.encoding_layers.append(bn())
 
-        self.encoding_layers.append(layers.Conv3D(64, 3, 2, **conv_args))
+        self.encoding_layers.append(layers.Conv3D(512, 3, 2, **conv_args))
         self.encoding_layers.append(next(conv_activation))
         self.encoding_layers.append(bn())
+
+        # self.encoding_layers.append(layers.Conv3D(2048, 1, 1, **conv_args))
+        # self.encoding_layers.append(next(conv_activation))
+        # self.encoding_layers.append(bn())
+
         final_shape = self._find_final_shape()
 
         self.encoding_layers.append(
@@ -352,13 +500,18 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         self.decoding_layers.append(next(conv_activation))
         self.decoding_layers.append(layers.Reshape(final_shape))
 
+        # self.decoding_layers.append(
+        #    layers.Conv3DTranspose(512, 1, 1, **conv_args))
+        # self.decoding_layers.append(next(conv_activation))
+        # self.decoding_layers.append(bn())
+
         self.decoding_layers.append(
-            layers.Conv3DTranspose(64, 3, 2, **conv_args))
+            layers.Conv3DTranspose(256, 3, 2, **conv_args))
         self.decoding_layers.append(next(conv_activation))
         self.decoding_layers.append(bn())
 
         self.decoding_layers.append(
-            layers.Conv3DTranspose(64, 3, 2, **conv_args))
+            layers.Conv3DTranspose(128, 3, 2, **conv_args))
         self.decoding_layers.append(next(conv_activation))
         self.decoding_layers.append(bn())
 
@@ -451,70 +604,6 @@ class DenseAutoEncoder(AutoEncoderBase):
                           padding='SAME', name='reconstruction'))
 
 
-def nonzero_mse(target, reconstruction):
-    """Mean squared error for non-zero values in the target matrix
-
-    Finds the mean squared error for all parts of the input tensor which
-    are not equal to zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Mean squared error for all non-zero entries in the target
-    """
-    mask = tf.cast(tf.not_equal(target, 0), tf.float32)
-    masked_difference = (target - reconstruction) * mask
-    return tf.square(masked_difference)
-
-
-def zero_mse(target, reconstruction):
-    """Mean squared error for zero values in the target matrix
-
-    Finds the mean squared error for all parts of the input tensor which
-    are equal to zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Mean squared error for all zero entries in the target
-    """
-    mask = tf.cast(tf.equal(target, 0), tf.float32)
-    masked_difference = (target - reconstruction) * mask
-    return tf.square(masked_difference)
-
-
-class CompositeMse(tf.keras.losses.Loss, ABC):
-    """Weighted mean squared error of nonzero-only and zero-only inputs."""
-
-    def __call__(self, y_true, y_pred, sample_weights=None):
-        """Overridden method; see base class (tf.keras.loss.Loss).
-
-        Finds the MSE between the autoencoder reconstruction and the nonzero
-        entries of the input, the MSE between the reconstruction and the zero
-        entries of the input and gives the weighted average of the two.
-
-        Arguments:
-            y_true: input tensor
-            y_pred: output tensor of the autoencoder (reconstruction)
-            sample_weights: (scalar) desired ratio of nonzero : zero
-
-        Returns:
-            Average weighted by:
-
-                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
-
-            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
-            parts of target respectively."""
-        frac = tf.reduce_mean(tf.divide(sample_weights, 1. + sample_weights))
-        return tf.math.add(
-            tf.math.multiply(frac, trimmed_nonzero_mse(y_true, y_pred)),
-            tf.math.multiply(1. - frac, trimmed_zero_mse(y_true, y_pred)))
-
-
 class SquaredError(tf.keras.losses.Loss):
     """Implementation of the squared error with no reduction.
 
@@ -522,6 +611,12 @@ class SquaredError(tf.keras.losses.Loss):
     last axis, even with reduction='none' is specified. This is not the case for
     this SquaredError class.
     """
+
+    def __init__(self, reduction=tf.keras.losses.Reduction.AUTO,
+                 name='squared_error', reduction_axis=None):
+        super().__init__(reduction=reduction, name=name)
+        reduction_axis = reduction_axis if reduction_axis is not None else []
+        self.reduction_axis = reduction_axis
 
     def call(self, y_true, y_pred):
         """Overridden method; see base class (tf.keras.loss.Loss).
@@ -534,7 +629,8 @@ class SquaredError(tf.keras.losses.Loss):
         """
         y_true = tf.convert_to_tensor(y_true)
         y_pred = tf.cast(y_pred, y_true.dtype)
-        return tf.square(y_true - y_pred)
+        return tf.reduce_mean(tf.square(y_true - y_pred),
+                              axis=self.reduction_axis)
 
 
 class ProximityMse(tf.keras.losses.Loss, ABC):
@@ -545,6 +641,12 @@ class ProximityMse(tf.keras.losses.Loss, ABC):
     contains a non-zero input in an ligand channel. This distances grid can be
     found using calcul_distances.calculate_distances.
     """
+
+    def __init__(self, reduction=tf.keras.losses.Reduction.AUTO,
+                 name='proximity_mse', reduction_axis=None):
+        super().__init__(reduction=reduction, name=name)
+        reduction_axis = reduction_axis if reduction_axis is not None else []
+        self.reduction_axis = reduction_axis
 
     def __call__(self, y_true, y_pred, sample_weight=None):
         """Overridden method; see base class (tf.keras.loss.Loss).
@@ -569,7 +671,142 @@ class ProximityMse(tf.keras.losses.Loss, ABC):
         proximities = 0.5 + 0.5 * (tf.math.tanh(4.0 - sample_weight))
         squared_difference = tf.math.squared_difference(y_true, y_pred)
         masked_sq_difference = tf.math.multiply(proximities, squared_difference)
-        return masked_sq_difference
+        return tf.reduce_mean(masked_sq_difference, axis=self.reduction_axis)
+
+
+class CompositeMse(tf.keras.losses.Loss, ABC):
+    """Weighted mean squared error of nonzero-only and zero-only inputs."""
+
+    def __init__(self, reduction=tf.keras.losses.Reduction.AUTO,
+                 name='composite_mse', reduction_axis=None):
+        super().__init__(reduction=reduction, name=name)
+        reduction_axis = reduction_axis if reduction_axis is not None else []
+        self.reduction_axis = reduction_axis
+
+    def call(self, y_true, y_pred):
+        """Overridden method; see base class (tf.keras.loss.Loss).
+
+        Finds the MSE between the autoencoder reconstruction and the nonzero
+        entries of the input, the MSE between the reconstruction and the zero
+        entries of the input and gives the weighted average of the two.
+
+        Arguments:
+            y_true: input tensor
+            y_pred: output tensor of the autoencoder (reconstruction)
+
+        Returns:
+            Average weighted by:
+
+                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
+
+            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
+            parts of target respectively."""
+
+        nz_mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+        nz_mask_sum = tf.reduce_sum(nz_mask)
+        nz_masked_difference = (y_true - y_pred) * nz_mask
+        nz_mse = tf.square(nz_masked_difference)
+        nz_mse_mean = tf.divide(tf.reduce_sum(nz_mse), nz_mask_sum)
+
+        z_mask = tf.cast(tf.equal(y_true, 0), tf.float32)
+        z_mask_sum = tf.reduce_sum(z_mask)
+        z_masked_difference = (y_true - y_pred) * z_mask
+        z_mse = tf.square(z_masked_difference)
+        z_mse_mean = tf.divide(tf.reduce_sum(z_mse), z_mask_sum)
+
+        frac = tf.divide(nz_mse_mean, tf.add(z_mse_mean, epsilon))
+        frac = tf.divide(frac, 1. + frac)
+        return tf.reduce_mean(tf.math.add(
+            tf.math.multiply(frac, nz_mse),
+            tf.math.multiply(1. - frac, z_mse)), axis=self.reduction_axis)
+
+
+class BinaryCrossentropy(tf.keras.losses.Loss):
+
+    def __init__(self, name='binary_crossentropy', reduction='none'):
+        super().__init__(name=name, reduction=reduction)
+
+    def call(self, y_true, y_pred):
+        bce = y_true * tf.math.log(y_pred + tf.keras.backend.epsilon())
+        bce += (1. - y_true) * tf.math.log(
+            1. - y_pred + tf.keras.backend.epsilon())
+        return -bce
+
+
+def nonzero_mse(y_true, y_pred):
+    """Mean squared error for non-zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are not equal to zero.
+
+    Arguments:
+        y_true: input tensor
+        y_pred: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all non-zero entries in the target
+    """
+    mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+    masked_difference = (y_true - y_pred) * mask
+    return tf.square(masked_difference)
+
+
+def zero_mse(y_true, y_pred):
+    """Mean squared error for zero values in the target matrix
+
+    Finds the mean squared error for all parts of the input tensor which
+    are equal to zero.
+
+    Arguments:
+        y_true: input tensor
+        y_pred: output tensor of the autoencoder
+
+    Returns:
+        Mean squared error for all zero entries in the target
+    """
+    mask = tf.cast(tf.equal(y_true, 0), tf.float32)
+    masked_difference = (y_true - y_pred) * mask
+    return tf.square(masked_difference)
+
+
+def nonzero_mae(y_true, y_pred):
+    """Mean absolute error loss function target values are not zero.
+
+    Arguments:
+        y_true: input tensor
+        y_pred: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is not zero.
+        This can be NaN if there are no nonzero inputs.
+    """
+    mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+    abs_diff = tf.abs(y_true - y_pred)
+    masked_abs_diff = tf.math.multiply(abs_diff, mask)
+    mask_sum = tf.reduce_sum(mask)
+    return tf.reduce_sum(masked_abs_diff) / mask_sum
+
+
+def zero_mae(y_true, y_pred):
+    """Mean absolute error loss function target values are zero.
+
+    Arguments:
+        y_true: input tensor
+        y_pred: output tensor of the autoencoder
+
+    Returns:
+        Tensor containing the mean absolute error between the target and
+        the reconstruction where the mean is taken over values where
+        the target is equal to zero.
+        This can be NaN if there are no inputs equal to zero.
+    """
+    mask = tf.cast(tf.equal(y_true, 0), tf.float32)
+    mask_sum = tf.reduce_sum(mask)
+    abs_diff = tf.abs(y_true - y_pred)
+    masked_abs_diff = tf.math.multiply(abs_diff, mask)
+    return tf.reduce_sum(masked_abs_diff) / mask_sum
 
 
 def close_mae(target, reconstruction, distances, threshold):
@@ -674,46 +911,6 @@ def mae(target, reconstruction):
         the reconstruction.
     """
     return tf.reduce_mean(tf.abs(target - reconstruction))
-
-
-def zero_mae(target, reconstruction):
-    """Mean absolute error loss function target values are zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Tensor containing the mean absolute error between the target and
-        the reconstruction where the mean is taken over values where
-        the target is equal to zero.
-        This can be NaN if there are no inputs equal to zero.
-    """
-    mask = tf.cast(tf.equal(target, 0), tf.float32)
-    mask_sum = tf.reduce_sum(mask)
-    abs_diff = tf.abs(target - reconstruction)
-    masked_abs_diff = tf.math.multiply(abs_diff, mask)
-    return tf.reduce_sum(masked_abs_diff) / mask_sum
-
-
-def nonzero_mae(target, reconstruction):
-    """Mean absolute error loss function target values are not zero.
-
-    Arguments:
-        target: input tensor
-        reconstruction: output tensor of the autoencoder
-
-    Returns:
-        Tensor containing the mean absolute error between the target and
-        the reconstruction where the mean is taken over values where
-        the target is not zero.
-        This can be NaN if there are no nonzero inputs.
-    """
-    mask = 1.0 - tf.cast(tf.equal(target, 0), tf.float32)
-    mask_sum = tf.reduce_sum(mask)
-    abs_diff = tf.abs(target - reconstruction)
-    masked_abs_diff = tf.math.multiply(abs_diff, mask)
-    return tf.reduce_sum(masked_abs_diff) / mask_sum
 
 
 def trimmed_nonzero_mae(target, reconstruction):

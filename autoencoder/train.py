@@ -57,8 +57,7 @@ def train(model, iterations, loss_fn, save_path=None,
         save_path = Path(save_path)
         print('Working directory: {}'.format(save_path))
 
-    previous_checkpoint = None
-    ratio = 1.0
+    start_time, previous_checkpoint = time.time(), None
     time_elapsed, time_per_iter, time_remaining = tuple(['--'] * 3)
     for iteration in range(starting_iter, iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
@@ -66,8 +65,7 @@ def train(model, iterations, loss_fn, save_path=None,
             checkpoint_path = Path(
                 save_path,
                 'checkpoints',
-                'ckpt_model_{}'.format(iteration + 1),
-                'ckpt_model_{}'.format(iteration + 1)
+                'ckpt_model_{}.h5'.format(iteration + 1)
             )
             model.save_weights(checkpoint_path, save_format='tf')
 
@@ -96,13 +94,13 @@ def train(model, iterations, loss_fn, save_path=None,
         else:
             start_time = time.time()
 
-        loss, metrics = model.train_step(ratio=ratio)
+        loss, metrics = model.training_step()
         loss = float(tf.reduce_mean(loss))
 
-        zero_mae = metrics.get('trimmed_zero_mae')
-        nonzero_mae = metrics.get('trimmed_nonzero_mae')
-
-        ratio = nonzero_mae / zero_mae
+        zero_mae = metrics.get('zero_mae')
+        nonzero_mae = metrics.get('nonzero_mae')
+        real_probabilities = float(metrics.get('real_probabilities', -1))
+        fake_probabilities = float(metrics.get('fake_probabilities', -1))
 
         loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:.3f}'.format(
             iteration, loss, nonzero_mae, zero_mae, lr)
@@ -111,9 +109,16 @@ def train(model, iterations, loss_fn, save_path=None,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7} | Learning rate: {8:.3e}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f}\n').format(
+                              '| Zero MAE: {5:0.4f}\n'
+                              ).format(
                 iteration, iterations, loss_fn, loss, nonzero_mae, zero_mae,
                 time_elapsed, time_remaining, lr)
+            if real_probabilities >= 0:
+                console_output += ('Probabilities (real | fake): ({0:0.4f} | '
+                                   '{1:0.4f})\n').format(
+                    real_probabilities,
+                    fake_probabilities
+                )
             if iteration == starting_iter:
                 print()
             print_with_overwrite(console_output)
@@ -131,7 +136,7 @@ def train(model, iterations, loss_fn, save_path=None,
     if save_path is not None:
         # Save final trained autoencoder
         checkpoint_path = Path(
-            save_path, 'checkpoints', 'final_model_{}'.format(iterations))
+            save_path, 'checkpoints', 'final_model_{}.h5'.format(iterations))
         model.save_weights(checkpoint_path, save_format='h5')
 
         if overwrite_checkpoints and previous_checkpoint is not None:
