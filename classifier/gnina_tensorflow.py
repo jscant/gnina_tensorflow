@@ -17,15 +17,14 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
-import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 
-from autoencoder.parse_command_line_args import LoadConfigTrain
+from autoencoder.parse_command_line_args import pickup, LoadConfigTrain
 from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
-    DenseFS
-from utilities.gnina_functions import process_batch, format_time, get_dims, \
-    load_autoencoder, print_with_overwrite
+    define_densefs_model
+from utilities.gnina_functions import process_batch, print_with_overwrite, \
+    format_time
 
 
 def main():
@@ -155,10 +154,8 @@ def main():
     # If specified, use autoencoder reconstructions to train/test
     autoencoder = None
     if isinstance(args.autoencoder, str):
-        input_dims = get_dims(
-            args.dimension, args.resolution, args.ligmap, args.recmap)
-        autoencoder = load_autoencoder(args, args.autoencoder, input_dims,
-                              None, {})
+        if Path(args.autoencoder).is_dir():
+            autoencoder = pickup(args.autoencoder)
 
     gap = 100  # Window to average training loss over (in batches)
 
@@ -199,8 +196,7 @@ def main():
                 '--resume must be used in conjunction with load_model')
         log_fname = Path(
             args.load_model).expanduser().parents[1] / 'loss_log.txt'
-        starting_iter = int(str(
-            Path(args.load_model).name).split('_')[-1].split('.')[0])
+        starting_iter = int(str(Path(args.load_model).name).split('_')[-1])
         with open(log_fname, 'r') as f:
             losses_string = '\n'.join(
                 f.read().split('\n')[:starting_iter + 1]) + '\n'
@@ -210,11 +206,10 @@ def main():
     losses = []
 
     if args.load_model is not None:  # Load a model
-        model = tf.keras.models.load_model(args.load_model)
+        model = pickup(args.load_model)
     else:
         if args.densefs:
-            # model = define_densefs_model(dims, bc=args.use_densenet_bc)
-            model = DenseFS(dims)
+            model = define_densefs_model(dims, bc=args.use_densenet_bc)
         else:
             model = define_baseline_model(dims)
 
@@ -244,7 +239,8 @@ def main():
                              train=True, autoencoder=autoencoder)
 
         # Save losses to disk
-
+        if not isinstance(loss, float):
+            loss = loss[0]
         losses.append(loss)
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(loss_history_fname, 'w') as f:
@@ -260,16 +256,15 @@ def main():
             print('\n')
 
         console_output = (
-            'Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | '
-            'Time remaining: {4}').format(
+            'Iteration: {0}/{1} | loss: {2:0.4f}\nTime elapsed: {3} | Time remaining: {4}').format(
             iteration, args.iterations, loss, format_time(time_elapsed),
             formatted_eta)
-        #print_with_overwrite(console_output)
+        print_with_overwrite(console_output)
 
     # Save model for later inference
     checkpoint_path = args.save_path / 'checkpoints' / 'final_model_{}'.format(
         args.iterations)
-    # model.save(checkpoint_path)
+    model.save(checkpoint_path)
 
     # Plot losses using moving window of <gap> batches
     losses = [np.mean(losses[window:window + gap])

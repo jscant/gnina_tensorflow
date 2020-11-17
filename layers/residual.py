@@ -38,7 +38,7 @@ class ResBlock(tf.keras.layers.Layer):
             activation: activation function for convolutional layers
             name: name of residual block
         """
-        super().__init__()
+        super().__init__(name=name)
 
         conv_initialiser = tf.keras.initializers.HeNormal()
         activations = generate_activation_layers(name, activation)
@@ -117,7 +117,7 @@ class InverseResBlock(tf.keras.layers.Layer):
             activation: activation function for convolutional layers
             name: name of residual block
         """
-        super().__init__()
+        super().__init__(name=name)
 
         conv_initialiser = tf.keras.initializers.HeNormal()
         activations = generate_activation_layers(name, activation)

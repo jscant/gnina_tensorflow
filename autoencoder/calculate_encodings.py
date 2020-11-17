@@ -11,12 +11,12 @@ import time
 from pathlib import Path
 
 import molgrid
+import tempfile
 import tensorflow as tf
 
 from autoencoder.parse_command_line_args import parse_command_line_args
 from utilities import gnina_embeddings_pb2, gnina_functions
 from utilities.reorder_types_file import reorder
-
 
 def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                         dimension, resolution, rotate=False, ligmap=None,
@@ -168,7 +168,11 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
 
         batch = e_test.next_batch(batch_size)
         gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
-        encodings_numpy = encoder.encode(input_tensor.tonumpy(), training=False)
+
+        inputs = [input_tensor.tonumpy()]
+        if composite:  # We don't use this but is needed for a valid model
+            inputs.append(tf.constant(1., shape=(batch_size,)))
+        _, encodings_numpy = encoder.predict_on_batch(inputs)
 
         for batch_idx in range(batch_size):
             global_idx = iteration * batch_size + batch_idx
@@ -197,9 +201,10 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     batch = e_test.next_batch(batch_size)
     gmaker.forward(batch, input_tensor, 0, random_rotation=rotate)
 
-    batch = e_test.next_batch(batch_size)
-    gmaker.forward(batch, input_tensor, 0, random_rotation=False)
-    encodings_numpy = encoder.encode(input_tensor.tonumpy(), training=False)
+    inputs = [input_tensor.tonumpy()]
+    if composite:
+        inputs.append(tf.constant(1., shape=(batch_size,)))
+    _, encodings_numpy = encoder.predict_on_batch(inputs)
 
     for batch_idx in range(remainder):
         global_idx = iterations * batch_size + batch_idx
@@ -221,6 +226,8 @@ if __name__ == '__main__':
 
     molgrid.set_gpu_enabled(1 - args.use_cpu)
     save_path = Path(args.save_path) / args.name
+
+    tf.keras.backend.clear_session()
 
     with gnina_functions.Timer() as t:
         calculate_encodings(

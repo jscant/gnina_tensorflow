@@ -20,8 +20,11 @@ from pathlib import Path
 import molgrid
 import tensorflow as tf
 
+from autoencoder.autoencoder_definitions import zero_mse, nonzero_mse, \
+    composite_mse, nonzero_mae, zero_mae, trimmed_nonzero_mae, trimmed_zero_mae, \
+    close_mae, close_nonzero_mae, close_zero_mae
 from utilities.gnina_functions import get_test_info, Timer, process_batch, \
-    print_with_overwrite, get_dims, load_autoencoder
+    print_with_overwrite
 
 
 def inference(model, test_types, data_root, savepath, batch_size, labels=None,
@@ -62,6 +65,7 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
     predictions_fname = savepath / predictions_fname
 
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
+
     example_provider_kwargs = {
         'data_root': str(Path(data_root).expanduser()), 'balanced': False,
         'shuffle': False, 'cache_structs': False
@@ -181,16 +185,31 @@ if __name__ == '__main__':
                     autoencoder_path = value
 
     molgrid.set_gpu_enabled(1 - int(args.use_cpu))
+    custom_objects = {
+        'zero_mse': zero_mse,
+        'nonzero_mse': nonzero_mse,
+        'composite_mse': composite_mse,
+        'nonzero_mae': nonzero_mae,
+        'zero_mae': zero_mae,
+        'trimmed_nonzero_mae': trimmed_nonzero_mae,
+        'trimmed_zero_mae': trimmed_zero_mae,
+        'close_mae': close_mae,
+        'close_nonzero_mae': close_nonzero_mae,
+        'close_zero_mae': close_zero_mae
+    }
 
     model = tf.keras.models.load_model(
-        args.model_dir)
+        args.model_dir,
+        custom_objects=custom_objects
+    )
 
-    autoencoder = None
-    if isinstance(args.autoencoder, str):
-        input_dims = get_dims(
-            args.dimension, args.resolution, args.ligmap, args.recmap)
-        autoencoder = load_autoencoder(
-            args.autoencoder, input_dims, args.batch_size)
+    if autoencoder_path is not None:
+        autoencoder = tf.keras.models.load_model(
+            autoencoder_path,
+            custom_objects=custom_objects
+        )
+    else:
+        autoencoder = None
 
     inference(
         model, args.test, args.data_root, args.save_path, args.batch_size,

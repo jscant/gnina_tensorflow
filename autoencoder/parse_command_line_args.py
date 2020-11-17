@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+import tensorflow as tf
+
 from autoencoder import autoencoder_definitions
 
 
@@ -17,6 +19,8 @@ def str_to_type(arg):
     try:
         float(arg)
     except ValueError:
+        if arg == 'None':
+            return None
         return str(arg)
     if arg.find('.') == -1 and arg.find('e') == -1:
         return int(arg)
@@ -50,13 +54,13 @@ class LoadConfigTrain(argparse.Action):
                     setattr(
                         namespace, chunks[0],
                         [False, True][chunks[1] == 'True'])
-                elif chunks[1] == 'None':
-                    setattr(namespace, chunks[0], None)
                 elif chunks[0] == 'name':
                     setattr(namespace, *chunks)
                 elif chunks[0] not in ['load_model',
                                        'absolute_save_path']:
                     setattr(namespace, chunks[0], str_to_type(chunks[1]))
+                elif chunks[1] == 'None':
+                    setattr(namespace, chunks[0], None)
 
         # args.load_model is always None if we do not do this, even when
         # it is specified using --load_model.
@@ -104,13 +108,46 @@ class LoadConfigTest(argparse.Action):
         setattr(namespace, 'load_model', values)
 
 
+def pickup(path):
+    """Loads saved autoencoder.
+
+    Arguments:
+        path: location of saved weights and architecture
+
+    Returns:
+        AutoEncoderBase-derived object initialised with weights from saved
+        checkpoint.
+    """
+
+    ae = tf.keras.models.load_model(
+        path,
+        custom_objects={
+            'zero_mse': autoencoder_definitions.zero_mse,
+            'nonzero_mse': autoencoder_definitions.nonzero_mse,
+            'composite_mse': autoencoder_definitions.composite_mse,
+            'nonzero_mae': autoencoder_definitions.nonzero_mae,
+            'zero_mae': autoencoder_definitions.zero_mae,
+            'trimmed_nonzero_mae': autoencoder_definitions.trimmed_nonzero_mae,
+            'trimmed_zero_mae': autoencoder_definitions.trimmed_zero_mae,
+            'close_mae': autoencoder_definitions.close_mae,
+            'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
+            'close_zero_mae': autoencoder_definitions.close_zero_mae,
+            'proximity_mse': autoencoder_definitions.proximity_mse,
+            'SquaredError': autoencoder_definitions.SquaredError
+        }
+    )
+    return ae
+
+
 def parse_command_line_args(test_or_train='train'):
     """Parse command line args and return as dict.
 
-    Returns a namespace containing all args, default or otherwise;
-    Command line args override args found in the config of model specified in
-    'load_model' arg. Also returns either None (no loaded model) or a keras
-    loaded model (if loaded model is specified).
+    Returns a namespace containing all args, default or otherwise; if 'pickup'
+    is specified, as many args as are contained in the config file for that
+    (partially) trained model are loaded, otherwise defaults are given.
+    Command line args override args found in the config of model found in
+    'pickup' directory. Also returns either None (no loaded model) or a
+    keras loaded model (if loaded model is specified).
     """
 
     parser = argparse.ArgumentParser()
@@ -203,8 +240,8 @@ def parse_command_line_args(test_or_train='train'):
             '--verbose', action='store_true',
             help='Do not suppress deprecation messages and other tf warnings')
         parser.add_argument('--adversarial', action='store_true',
-                            help='Use convolutional neural network to check '
-                                 'how realistic reconstructions are.')
+                            help='Use adversarial CNN to make reconstructions '
+                                 'more realistic.')
     else:
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTest, nargs='?',
@@ -225,14 +262,9 @@ def parse_command_line_args(test_or_train='train'):
     parser.add_argument('--name', type=str, required=False)
     args = parser.parse_args()
 
-    # If we are loading, return the correct class of autoencoder else None
     autoencoder = None
     if args.load_model is not None:  # Load a model
-        autoencoder = {
-            'multi': autoencoder_definitions.MultiLayerAutoEncoder,
-            'dense': autoencoder_definitions.DenseAutoEncoder,
-            'single': autoencoder_definitions.SingleLayerAutoEncoder
-        }[args.model]
+        autoencoder = pickup(args.load_model)
     elif test_or_train == 'test':
         raise RuntimeError(
             'Please specify a model to use to calculate encodings.')
