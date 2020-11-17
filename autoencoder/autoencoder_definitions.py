@@ -165,6 +165,7 @@ class AutoEncoderBase(tf.keras.Model):
 
         loss_reduction = tf.keras.losses.Reduction.AUTO
         reduction_axis = [-4, -3, -2, -1]
+        # reduction_axis = [-5, -4, -3, -2, -1]
         self.loss = None
         if loss == 'mse':
             loss_class = SquaredError
@@ -203,7 +204,7 @@ class AutoEncoderBase(tf.keras.Model):
         self.e.populate(str(Path(train_types).expanduser()))
 
         # noinspection PyArgumentList
-        self.gmaker = molgrid.GridMaker(
+        self.gmaker = self.gmaker = molgrid.GridMaker(
             binary=binary_mask,
             dimension=dimension,
             resolution=resolution)
@@ -261,7 +262,7 @@ class AutoEncoderBase(tf.keras.Model):
                     self.resolution)
                 feature_vectors.append(spatial_information)
 
-            reconstructions = self.call(input_images, training=True)
+            reconstructions = self(input_images, training=True)
 
             if len(feature_vectors) == 1:
                 reconstruction_loss = self.loss(
@@ -274,11 +275,15 @@ class AutoEncoderBase(tf.keras.Model):
             for name, func in self.metrics_dict.get('reconstruction').items():
                 metrics[name] = float(func(input_images, reconstructions))
 
-        grads = tape.gradient(
-            reconstruction_loss, self.trainable_variables)
-        self.opt.apply_gradients(zip(
-            grads, self.trainable_variables
-        ))
+        # gradients = tape.gradient(
+        #    reconstruction_loss, self.trainable_variables)
+
+        # self.opt.apply_gradients(
+        #    zip(gradients, self.trainable_variables))
+
+        # self.opt.minimize(
+        #    reconstruction_loss, self.trainable_variables, tape=tape)
+
         return reconstruction_loss, metrics
 
     @tf.function
@@ -300,11 +305,13 @@ class AutoEncoderBase(tf.keras.Model):
                 feature_vectors.append(spatial_information)
 
             reconstructions = self(input_images, training=True)
+            mask = tf.cast(tf.less(reconstructions, 0.0001), tf.float32)
+            masked_reconstructions = tf.multiply(mask, reconstructions)
 
             probabilities_real = self.discriminator(
                 input_images, training=True)
             probabilities_fake = self.discriminator(
-                reconstructions, training=True)
+                masked_reconstructions, training=True)
 
             if len(feature_vectors) == 1:
                 reconstruction_loss = self.loss(
@@ -329,7 +336,7 @@ class AutoEncoderBase(tf.keras.Model):
         gen_recon_grads = recon_tape.gradient(
             reconstruction_loss, self.trainable_variables)
 
-        if reconstruction_loss < 0.005:
+        if reconstruction_loss < 0.0005:
             gen_fake_grads = sim_tape.gradient(
                 similarity_loss, self.trainable_variables
             )
@@ -356,43 +363,11 @@ class AutoEncoderBase(tf.keras.Model):
             from metric names to the value of that metric for the batch.
         """
         batch = self.e.next_batch(self.batch_size)
-        self.gmaker.forward(batch, self.input_tensor, 0,
-                            random_rotation=True)
+        self.gmaker.forward(batch, self.input_tensor, 0, random_rotation=False)
         input_numpy = self.input_tensor.tonumpy()
         original_images = tf.convert_to_tensor(np.minimum(1.0, input_numpy))
         self.iteration += 1
         return self.get_gradients(original_images)
-
-    def get_config(self):
-        """Overloaded method; see base class (tf.keras.Model)."""
-        config = super().get_config()
-        config.update(
-            {'metric_distance_threshold': self.metric_distance_threshold,
-             'resolution': self.resolution,
-             'dimension': self.dimension,
-             'dims': self.dims,
-             'latent_size': self.latent_size,
-             'initialiser': self.initialiser,
-             'learning_rate_schedule': self.learning_rate_schedule,
-             'encoding_layers': self.encoding_layers,
-             'decoding_layers': self.decoding_layers,
-             'batch_size': self.batch_size,
-             'mae': mae,
-             'trimmed_nonzero_mae': trimmed_nonzero_mae,
-             'zero_mse': zero_mse,
-             'nonzero_mse': nonzero_mse,
-             '_construct_layers': self._construct_layers,
-             'loss': self.loss,
-             'e': self.e,
-             'rec_channels': self.rec_channels,
-             'gmaker': self.gmaker,
-             'input_tensor': self.input_tensor,
-             'iteration': self.iteration,
-             'opt': self.opt,
-             'train_step': self.train_step,
-             '_get_gradients': self._get_gradients}
-        )
-        return config
 
     def _find_final_shape(self):
         """Finds output shape of final convolutional layer in encoder."""
@@ -469,8 +444,8 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
 
         conv_args = {'padding': 'same',
                      'data_format': 'channels_first',
-                     'use_bias': False,
-                     'kernel_initializer': self.initialiser}
+                     'use_bias': False, }
+        # 'kernel_initializer': self.initialiser}
 
         self.encoding_layers.append(layers.Conv3D(128, 3, 2, **conv_args))
         self.encoding_layers.append(next(conv_activation))
@@ -484,10 +459,6 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         self.encoding_layers.append(next(conv_activation))
         self.encoding_layers.append(bn())
 
-        # self.encoding_layers.append(layers.Conv3D(2048, 1, 1, **conv_args))
-        # self.encoding_layers.append(next(conv_activation))
-        # self.encoding_layers.append(bn())
-
         final_shape = self._find_final_shape()
 
         self.encoding_layers.append(
@@ -500,11 +471,6 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         self.decoding_layers.append(next(conv_activation))
         self.decoding_layers.append(layers.Reshape(final_shape))
 
-        # self.decoding_layers.append(
-        #    layers.Conv3DTranspose(512, 1, 1, **conv_args))
-        # self.decoding_layers.append(next(conv_activation))
-        # self.decoding_layers.append(bn())
-
         self.decoding_layers.append(
             layers.Conv3DTranspose(256, 3, 2, **conv_args))
         self.decoding_layers.append(next(conv_activation))
@@ -516,7 +482,7 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         self.decoding_layers.append(bn())
 
         self.decoding_layers.append(layers.Conv3DTranspose(
-            dims[0], 3, 2, name='reconstruction', activation=final_activation,
+            dims[0], 5, 2, name='reconstruction', activation=final_activation,
             **conv_args))
 
 

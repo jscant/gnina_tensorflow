@@ -128,6 +128,8 @@ def main():
                 f.read().split('\n')[:starting_iter + 1]) + '\n'
         barred_args.append('load_model')
 
+    with open(save_path / 'model.summary', 'w') as f:
+        ae.summary(line_length=80, print_fn=lambda x: f.write(x + '\n'))
     ae.summary()
     ae.plot(save_path / 'model.png', show_shapes=True)
 
