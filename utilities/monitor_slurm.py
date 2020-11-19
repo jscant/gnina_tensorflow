@@ -111,18 +111,18 @@ class JobList:
         for job_id, (old_status, job_name) in self.status.items():
             new_status = get_status(job_id)
             if new_status != old_status:
-                if new_status == 'out_of_me+':
+                if new_status.startswith('out_of_me'):
                     # OOM failure, pass to handle_failures
                     failed.add((job_id, job_name))
                     self.log_output('Job with id {} has failed. Attempting to '
                                     'restart.'.format(job_id))
-                elif new_status == 'finished':
+                elif new_status.startswith('finished'):
                     # Job has finished so can be safely forgotten about
                     self.delete_job(job_id)
                     self.log_output(
                         'Job with id {} has finished successfully.'.format(
                             job_id))
-                elif new_status != 'running':
+                elif not new_status.startswith('running'):
                     # Either a manual calculation or something else has gone
                     # wrong
                     self.log_output(
@@ -134,7 +134,7 @@ class JobList:
                 continue
             # New job: need to determine and record its status
             status = get_status(job_id)
-            if status not in ['running', 'pending']:
+            if status[:7] not in ['running', 'pending']:
                 self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     self._statuses[job_id][0], job_id))
             else:
@@ -155,6 +155,7 @@ class JobList:
         for job_id, job_name in failed:
             working_dir = get_working_dir(job_id)
             if working_dir is None:  # Not an autoencoder
+                self.log_output('Job {} is not an autoencoder.'.format(job_id))
                 continue
             checkpoints_dir = Path(working_dir, 'checkpoints')
             max_iters = -1
@@ -180,7 +181,7 @@ class JobList:
             submitted_job_id = sbatch.split('\n')[-1].strip().split()[-1]
             time.sleep(10)
             submitted_job_status = get_status(submitted_job_id)
-            if submitted_job_status not in ['running', 'pending']:
+            if submitted_job_status[:7] not in ['running', 'pending']:
                 self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     submitted_job_status, submitted_job_id))
             else:
