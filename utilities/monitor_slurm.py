@@ -7,6 +7,7 @@ maximum run time limit on the naga-small queue.
 """
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -65,10 +66,14 @@ def get_working_dir(job_id):
 class JobList:
     """Class for live handling of active, completed and failed slurm jobs."""
 
-    def __init__(self, slurm_node):
+    def __init__(self, slurm_node, log_file=None):
         self._statuses = {}
         self._template = template
         self._slurm_node = slurm_node
+        if log_file is None:
+            self.log_file = None
+        else:
+            self.log_file = Path(log_file).expanduser().resolve()
         print('Initialising job handler...')
         for job_id, job_name in get_job_ids():
             status = get_status(job_id)
@@ -181,10 +186,27 @@ class JobList:
                                                     submitted_job_id))
             self.delete_job(job_id)
 
+    def log_output(self, *args, **kwargs):
+        """Print to console, and optionally to log file.
+
+        Prints output to log file if specified in constructor of class.
+
+        Arguments:
+            *args: items to be printed
+            **kwargs: keyworkd arguments for print statement
+        """
+        print(*args, **kwargs)
+        if self.log_file is not None:
+            original_stdout = sys.stdout
+            with open(self.log_file, 'a') as f:
+                sys.stdout = f
+                print(*args, **kwargs)
+                sys.stdout = original_stdout
+
 
 if __name__ == '__main__':
     start_time = time.time()
-    jl = JobList(os.environ.get('SLURMD_NODENAME'))
+    jl = JobList(os.environ.get('SLURMD_NODENAME'), log_file='~/daemon.log')
     while True:
         jl.update_status()
         time.sleep(1)
