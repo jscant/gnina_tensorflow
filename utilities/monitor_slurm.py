@@ -55,12 +55,13 @@ def get_status(job_id):
 
 def get_working_dir(job_id):
     """Get the working directory for an autoencoder slurm job."""
+    working_dir = None
     with open(Path('~/slurm_logs/slurm_{}.out'.format(
             job_id)).expanduser(), 'r') as f:
         for line in f.readlines():
             if line.startswith('absolute_save_path'):
-                return line.split()[-1]
-    return None
+                working_dir = line.split()[-1]
+    return working_dir
 
 
 class JobList:
