@@ -74,7 +74,7 @@ class JobList:
             self.log_file = None
         else:
             self.log_file = Path(log_file).expanduser().resolve()
-        print('Initialising job handler...')
+        self.log_output('Initialising job handler...')
         for job_id, job_name in get_job_ids():
             status = get_status(job_id)
             self._statuses[job_id] = (status, job_name)
@@ -83,8 +83,9 @@ class JobList:
                     'Unexpected status: {0} for job id: {1}'.format(
                         status, job_id))
             else:
-                print('Job {0} ({1}) has started with status {2}.'.format(
-                    job_id, job_name, status))
+                self.log_output(
+                    'Job {0} ({1}) has started with status {2}.'.format(
+                        job_id, job_name, status))
 
     @property
     def status(self):
@@ -113,18 +114,20 @@ class JobList:
                 if new_status == 'out_of_me+':
                     # OOM failure, pass to handle_failures
                     failed.add((job_id, job_name))
-                    print('Job with id {} has failed. Attempting to '
-                          'restart.'.format(job_id))
+                    self.log_output('Job with id {} has failed. Attempting to '
+                                    'restart.'.format(job_id))
                 elif new_status == 'finished':
                     # Job has finished so can be safely forgotten about
                     self.delete_job(job_id)
-                    print('Job with id {} has finished successfully.'.format(
-                        job_id))
+                    self.log_output(
+                        'Job with id {} has finished successfully.'.format(
+                            job_id))
                 elif new_status != 'running':
                     # Either a manual calculation or something else has gone
                     # wrong
-                    print('Unexpected status: {0} for job id: {1}'.format(
-                        self._statuses[job_id][0], job_id))
+                    self.log_output(
+                        'Unexpected status: {0} for job id: {1}'.format(
+                            self._statuses[job_id][0], job_id))
 
         for job_id, job_name in get_job_ids():
             if job_id in self.status.keys() or job_id in [i[0] for i in failed]:
@@ -132,10 +135,10 @@ class JobList:
             # New job: need to determine and record its status
             status = get_status(job_id)
             if status not in ['running', 'pending']:
-                print('Unexpected status: {0} for job id: {1}'.format(
+                self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     self._statuses[job_id][0], job_id))
             else:
-                print('Found new job with id {0} ({1}).'.format(
+                self.log_output('Found new job with id {0} ({1}).'.format(
                     job_id, job_name))
             self._statuses[job_id] = (status, job_name)
 
@@ -161,8 +164,8 @@ class JobList:
                 max_iters = max(max_iters, int(str(checkpoint).split('_')[-1]))
             if max_iters == -1:
                 # No saved checkpoint; abort this job
-                print('No checkpoint found for {0} ({1}), cannot '
-                      'restart.'.format(job_id, job_name))
+                self.log_output('No checkpoint found for {0} ({1}), cannot '
+                                'restart.'.format(job_id, job_name))
                 self.delete_job(job_id)
                 continue
             latest_ckpt = checkpoints_dir / 'ckpt_model_{}'.format(max_iters)
@@ -178,12 +181,13 @@ class JobList:
             time.sleep(10)
             submitted_job_status = get_status(submitted_job_id)
             if submitted_job_status not in ['running', 'pending']:
-                print('Unexpected status: {0} for job id: {1}'.format(
+                self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     submitted_job_status, submitted_job_id))
             else:
-                print('Job with id {0} ({1}) has been sucessfully restarted, '
-                      'with new job id {2}.'.format(job_id, job_name,
-                                                    submitted_job_id))
+                self.log_output(
+                    'Job with id {0} ({1}) has been sucessfully restarted, '
+                    'with new job id {2}.'.format(
+                        job_id, job_name, submitted_job_id))
             self.delete_job(job_id)
 
     def log_output(self, *args, **kwargs):
