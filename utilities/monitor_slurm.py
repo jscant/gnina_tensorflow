@@ -5,6 +5,7 @@ Usage: put on desktop and submit as slurm job, with low memory (~100 MB), 1 CPU
 and no GPUs. It will restart itself once per day to get around the one day
 maximum run time limit on the naga-small queue.
 """
+import datetime
 import os
 import subprocess
 import sys
@@ -209,7 +210,8 @@ class JobList:
             original_stdout = sys.stdout
             with open(self.log_file, 'a') as f:
                 sys.stdout = f
-                print(*args, **kwargs)
+                print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                      *args, **kwargs)
                 sys.stdout = original_stdout
 
 
