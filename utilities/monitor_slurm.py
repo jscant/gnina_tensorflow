@@ -127,7 +127,8 @@ class JobList:
                     self.log_output(
                         'Job with id {} has finished successfully.'.format(
                             job_id))
-                elif not new_status.startswith('running'):
+                elif not new_status.startswith('running') and \
+                        not len(new_status):
                     # Either a manual calculation or something else has gone
                     # wrong
                     self.log_output(
@@ -139,7 +140,7 @@ class JobList:
                 continue
             # New job: need to determine and record its status
             status = get_status(job_id)
-            if status[:7] not in ['running', 'pending']:
+            if status[:7] not in ['running', 'pending'] and not len(status):
                 self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     self._statuses[job_id][0], job_id))
             else:
@@ -186,7 +187,8 @@ class JobList:
             submitted_job_id = sbatch.split('\n')[-1].strip().split()[-1]
             time.sleep(10)
             submitted_job_status = get_status(submitted_job_id)
-            if submitted_job_status[:7] not in ['running', 'pending']:
+            if submitted_job_status[:7] not in ['running', 'pending'] and \
+                    not len(submitted_job_status):
                 self.log_output('Unexpected status: {0} for job id: {1}'.format(
                     submitted_job_status, submitted_job_id))
             else:
