@@ -32,18 +32,6 @@ python3 autoencoder/gnina_autoencoder.py {1} --resume
 """
 
 
-def get_job_ids():
-    """Gives a set of tuples with running job ids and job names."""
-    output = subprocess.run(
-        ['sq'], capture_output=True, check=True, shell=True).stdout
-    output = output.decode()[:-1]
-    jobs = [entry for entry in [line.split() for line in output.split('\n')]]
-    jobs = [(job[0], job[2]) for job in jobs if job[2] not in ['bash', 'daemon']
-            and not job[0].startswith('NM') and job[-1].find('02') != -1]
-    jobs = set([(job[0], job[1]) for job in jobs])
-    return jobs
-
-
 def get_status(job_id):
     """Get the status (running, finished, OOM, cancelled, pending) for a job."""
     sacct = subprocess.run(
@@ -71,12 +59,13 @@ class JobList:
         self._statuses = {}
         self._template = template
         self._slurm_node = slurm_node
+        self._numeral = slurm_node.split('.')[0][-2:]
         if log_file is None:
             self.log_file = None
         else:
             self.log_file = Path(log_file).expanduser().resolve()
         self.log_output('Initialising job handler...')
-        for job_id, job_name in get_job_ids():
+        for job_id, job_name in self.get_job_ids():
             status = get_status(job_id)
             self._statuses[job_id] = (status, job_name)
             if self._statuses[job_id][0] not in ['running', 'pending']:
@@ -87,6 +76,20 @@ class JobList:
                 self.log_output(
                     'Job {0} ({1}) has started with status {2}.'.format(
                         job_id, job_name, status))
+
+    def get_job_ids(self):
+        """Gives a set of tuples with running job ids and job names."""
+        output = subprocess.run(
+            ['sq'], capture_output=True, check=True, shell=True).stdout
+        output = output.decode()[:-1]
+        jobs = [entry for entry in
+                [line.split() for line in output.split('\n')]]
+        jobs = [(job[0], job[2]) for job in jobs if
+                job[2] not in ['bash', 'daemon']
+                and not job[0].startswith('NM') and job[-1].find(
+                    self._numeral) != -1]
+        jobs = set([(job[0], job[1]) for job in jobs])
+        return jobs
 
     @property
     def status(self):
@@ -130,7 +133,7 @@ class JobList:
                         'Unexpected status: {0} for job id: {1}'.format(
                             self._statuses[job_id][0], job_id))
 
-        for job_id, job_name in get_job_ids():
+        for job_id, job_name in self.get_job_ids():
             if job_id in self.status.keys() or job_id in [i[0] for i in failed]:
                 continue
             # New job: need to determine and record its status
