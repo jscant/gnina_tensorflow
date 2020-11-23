@@ -116,7 +116,9 @@ class JobList:
         for job_id, (old_status, job_name) in self.status.items():
             new_status = get_status(job_id)
             if new_status != old_status:
-                if new_status.startswith('out_of_me'):
+                if new_status.startswith('out_of_me') or \
+                        new_status.startswith('deadl') or \
+                        new_status.startswith('fail'):
                     # OOM failure, pass to handle_failures
                     failed.add((job_id, job_name))
                     self.log_output('Job with id {} has failed. Attempting to '
