@@ -164,6 +164,7 @@ class JobList:
             working_dir = get_working_dir(job_id)
             if working_dir is None:  # Not an autoencoder
                 self.log_output('Job {} is not an autoencoder.'.format(job_id))
+                self.delete_job(job_id)
                 continue
             checkpoints_dir = Path(working_dir, 'checkpoints')
             max_iters = -1
