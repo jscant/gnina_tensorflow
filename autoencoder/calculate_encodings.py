@@ -110,6 +110,9 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
 
     types_file = Path(types_file).expanduser()
     save_path = Path(save_path).expanduser()
+    encodings_dir = Path(save_path) / 'encodings'
+    encodings_dir.mkdir(exist_ok=True, parents=True)
+
     delete_types_file, types_file, paths = get_paths(types_file)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
@@ -119,8 +122,10 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
             data_root=str(Path(data_root).expanduser()), balanced=False,
             shuffle=False)
     else:
-        rec_typer = molgrid.FileMappedGninaTyper(recmap)
-        lig_typer = molgrid.FileMappedGninaTyper(ligmap)
+        recmap = Path(recmap).expanduser().resolve()
+        ligmap = Path(ligmap).expanduser().resolve()
+        rec_typer = molgrid.FileMappedGninaTyper(str(recmap))
+        lig_typer = molgrid.FileMappedGninaTyper(str(ligmap))
         # noinspection PyArgumentList
         e_test = molgrid.ExampleProvider(
             rec_typer, lig_typer, data_root=str(Path(data_root).resolve()),
@@ -149,8 +154,6 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     # Inference (obtain encodings)
     current_rec = paths[0][1]
     encodings = []
-    encodings_dir = Path(save_path) / 'encodings'
-    encodings_dir.mkdir(exist_ok=True, parents=True)
     start_time = time.time()
 
     try:
