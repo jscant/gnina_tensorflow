@@ -11,12 +11,12 @@ import time
 from pathlib import Path
 
 import molgrid
-import tempfile
 import tensorflow as tf
 
 from autoencoder.parse_command_line_args import parse_command_line_args
 from utilities import gnina_embeddings_pb2, gnina_functions
 from utilities.reorder_types_file import reorder
+
 
 def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                         dimension, resolution, rotate=False, ligmap=None,
@@ -116,11 +116,13 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     delete_types_file, types_file, paths = get_paths(types_file)
 
     # Setup libmolgrid to feed Examples into tensorflow objects
+    example_provider_kwargs = {
+        'data_root': str(Path(data_root).expanduser()), 'balanced': False,
+        'shuffle': False, 'cache_structs': False
+    }
     if ligmap is None or recmap is None:
         # noinspection PyArgumentList
-        e_test = molgrid.ExampleProvider(
-            data_root=str(Path(data_root).expanduser()), balanced=False,
-            shuffle=False)
+        e_test = molgrid.ExampleProvider(**example_provider_kwargs)
     else:
         recmap = Path(recmap).expanduser().resolve()
         ligmap = Path(ligmap).expanduser().resolve()
@@ -128,8 +130,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
         lig_typer = molgrid.FileMappedGninaTyper(str(ligmap))
         # noinspection PyArgumentList
         e_test = molgrid.ExampleProvider(
-            rec_typer, lig_typer, data_root=str(Path(data_root).resolve()),
-            balanced=False, shuffle=False)
+            rec_typer, lig_typer, **example_provider_kwargs)
     e_test.populate(str(Path(types_file).expanduser()))
 
     if delete_types_file:
