@@ -174,6 +174,7 @@ def main():
         metric_distance_threshold=args.metric_distance_threshold,
         overwrite_checkpoints=args.overwrite_checkpoints,
         binary_mask=args.binary_mask,
+        denoising=args.denoising,
         loss_log=loss_log,
         starting_iter=starting_iter
     )

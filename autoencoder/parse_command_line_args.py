@@ -242,6 +242,8 @@ def parse_command_line_args(test_or_train='train'):
         parser.add_argument('--adversarial', action='store_true',
                             help='Use adversarial CNN to make reconstructions '
                                  'more realistic.')
+        parser.add_argument('--denoising', type=float, default=-1.0,
+                            help='Rate of random zero-ing of inputs.')
     else:
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTest, nargs='?',

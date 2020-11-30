@@ -23,7 +23,7 @@ def train(model, data_root, train_types, iterations, batch_size,
           dimension, resolution, loss_fn, save_path=None,
           metric_distance_threshold=-1.0, overwrite_checkpoints=False,
           ligmap=None, recmap=None, save_interval=-1, binary_mask=False,
-          silent=False, loss_log=None, starting_iter=0):
+          denoising=-1.0, silent=False, loss_log=None, starting_iter=0):
     """Train an autoencoder.
     
     Arguments:
@@ -51,6 +51,8 @@ def train(model, data_root, train_types, iterations, batch_size,
         binary_mask: instead of real numbers, input grid is binary where a 1
             indicates that the real input would have had a value greater than
             zero
+        denoising: probability with which non-zero inputs are assigned zero
+            values (to make a denoising autoencoder)
         silent: when True, print statements are suppressed, no output is written
             to disk (checkpoints, loss history)
         loss_log: string containing losses up to the point of the start of
@@ -141,7 +143,13 @@ def train(model, data_root, train_types, iterations, batch_size,
         input_tensor_numpy = np.minimum(
             input_tensor.tonumpy(), 1.0).astype('float32')
 
-        x_inputs = {'input_image': input_tensor_numpy}
+        if denoising > 0:
+            p_grid = np.random.rand(*input_tensor_numpy.shape)
+            noisy_input = input_tensor_numpy.copy()
+            noisy_input[np.where(p_grid < denoising)] = 0
+            x_inputs = {'input_image': noisy_input}
+        else:
+            x_inputs = {'input_image': input_tensor_numpy}
 
         if loss_fn == 'composite_mse':
             x_inputs['frac'] = tf.constant(
