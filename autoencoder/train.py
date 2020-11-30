@@ -145,7 +145,7 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         if denoising > 0:
             p_grid = np.random.rand(*input_tensor_numpy.shape)
-            noisy_input = input_tensor_numpy.copy()
+            noisy_input = input_tensor.tonumpy()
             noisy_input[np.where(p_grid < denoising)] = 0
             x_inputs = {'input_image': noisy_input}
         else:
