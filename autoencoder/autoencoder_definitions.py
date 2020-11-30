@@ -362,7 +362,7 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
         encoding_activation_layer = next(generate_activation_layers(
-            'encoding', hidden_activation, append_name_info=False))
+            'encoding', 'linear', append_name_info=False))
 
         conv_activation = generate_activation_layers(
             'conv', hidden_activation, append_name_info=True)
@@ -376,17 +376,17 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
 
         bn_axis = 1
 
-        x = layers.Conv3D(512, 3, 2, **conv_args)(input_image)
+        x = layers.Conv3D(1024, 3, 2, **conv_args)(input_image)
         x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = layers.Conv3D(512, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = layers.Conv3D(512, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
@@ -401,12 +401,12 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         x = next(conv_activation)(x)
         x = layers.Reshape(final_shape)(x)
 
-        x = layers.Conv3DTranspose(512, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
 
-        x = layers.Conv3DTranspose(512, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = layers.BatchNormalization(
             axis=bn_axis, epsilon=1.001e-5)(x)
@@ -581,6 +581,53 @@ def zero_mse(target, reconstruction):
     mask = tf.cast(tf.equal(target, 0), tf.float32)
     masked_difference = (target - reconstruction) * mask
     return tf.square(masked_difference)
+
+
+class CompositeMse(tf.keras.losses.Loss):
+    """Weighted mean squared error of nonzero-only and zero-only inputs.
+
+    Finds the MSE between the autoencoder reconstruction and the nonzero
+    entries of the input, the MSE between the reconstruction and the zero
+    entries of the input and gives the weighted average of the two.
+    """
+
+    def __init__(self, reduction=tf.keras.losses.Reduction.AUTO,
+                 name='composite_mse', reduction_axis=None):
+        super().__init__(reduction=reduction, name=name)
+        reduction_axis = reduction_axis if reduction_axis is not None else []
+        self.reduction_axis = reduction_axis
+
+    def call(self, y_true, y_pred):
+        """Overridden method; see base class (tf.keras.loss.Loss).
+
+        Get the point-wise weighted squared difference between two tensors.
+
+        Arguments:
+            y_true: input tensor
+            y_pred: output tensor of the autoencoder
+
+        Returns:
+            Average weighted by:
+                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
+            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
+            parts of target respectively.
+        """
+        nz_mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+        nz_mask_sum = tf.reduce_sum(nz_mask)
+        nz_masked_difference = tf.abs(y_true - y_pred) * nz_mask
+        nz_mean = tf.reduce_sum(nz_masked_difference) / nz_mask_sum
+
+        z_mask = tf.cast(tf.equal(y_true, 0), tf.float32)
+        z_mask_sum = tf.reduce_sum(z_mask)
+        z_masked_difference = tf.abs(y_true - y_pred) * z_mask
+        z_mean = tf.reduce_sum(z_masked_difference) / z_mask_sum
+
+        ratio = nz_mean / z_mean
+        frac = tf.reduce_mean(tf.divide(ratio, 1. + ratio))
+
+        return tf.math.add(
+            tf.math.multiply(frac, nonzero_mse(y_true, y_pred)),
+            tf.math.multiply(1. - frac, zero_mse(y_true, y_pred)))
 
 
 def composite_mse(target, reconstruction, ratio):
