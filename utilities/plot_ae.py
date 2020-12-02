@@ -89,9 +89,17 @@ def extract_data(loss_logs, fields, max_x=-1):
         RuntimeException if a field specified is not found.
     """
     data = defaultdict(dict)
+    extra_info = defaultdict(dict)
     for loss_log in loss_logs:
-        df = pd.read_csv(loss_log, sep=' ')
         exp = '/'.join(str(loss_log).split('/')[-3:-1])
+        config = loss_log.parent / 'config'
+        with open(config, 'r') as f:
+            for line in f.readlines():
+                param = line.split()[0]
+                value = line.split()[1]
+                if param == 'adversarial_variance':
+                    extra_info[exp][param] = float(value)
+        df = pd.read_csv(loss_log, sep=' ')
         print(exp)
         for field in fields:
             try:
@@ -101,10 +109,10 @@ def extract_data(loss_logs, fields, max_x=-1):
                     data[field][exp] = df[field].to_numpy()
             except KeyError:
                 raise RuntimeError('{} not found.'.format(field))
-    return data
+    return data, extra_info
 
 
-def plot_ax(data, field, gap, ax, colours=None):
+def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
     """Plot all data associated with a given field for all autoencoders.
 
     Arguments:
@@ -125,13 +133,27 @@ def plot_ax(data, field, gap, ax, colours=None):
             if idx < len(colours):
                 line_marker = colours[idx] + line_marker
         x, condensed_y = condense(y, gap)
-        trunc_x = len(x) // 10
+        if 'variance' in field:
+            trunc_x = len(x) // 100
+            mean_value = extra_info.get(exp, {}).get('adversarial_variance')
+            if mean_value is not None:
+                if len(data[field].keys()) == 1:
+                    ax.axhline(mean_value, color='k', linestyle='--')
+                else:
+                    ax.axhline(mean_value, linestyle='--')
+        else:
+            trunc_x = 0
+            if field == 'latent_mean':
+                ax.axhline(0.0, color='k', linestyle='--')
+            elif field == 'ks_p_value':
+                ax.axhline(0.05, color='k', linestyle='--')
         ax.plot(x, condensed_y, line_marker, label=exp)
+
         max_y = max(max_y, np.amax(condensed_y[trunc_x:]))
         min_y = min(min_y, np.amin(condensed_y[trunc_x:]))
 
     if min_y >= 0:
-        ax.set_ylim([-0.05 * min_y, 1.05 * max_y])
+        ax.set_ylim([-0.1 * min_y, 1.05 * max_y])
     else:
         ax.set_ylim([1.05 * min_y, 1.05 * max_y])
     ax.legend()
@@ -143,7 +165,7 @@ def plot_ax(data, field, gap, ax, colours=None):
 def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
     """Plot data from all fields in subplots of same fig."""
     loss_logs = get_loss_logs(filenames)
-    data = extract_data(loss_logs, fields, max_x)
+    data, extra_info = extract_data(loss_logs, fields, max_x)
     n_fields = len(fields)
     if n_fields == 1:
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
@@ -160,7 +182,8 @@ def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
             ax = axes[row, col]
         else:
             ax = axes[col]
-        max_y, min_y = plot_ax(data, field, gap, ax, colours=colours)
+        max_y, min_y = plot_ax(
+            data, field, gap, ax, extra_info=extra_info, colours=colours)
         ax_dict[field] = (ax, max_y, min_y)
     mean_max_y, mean_min_y = -np.inf, np.inf
     var_max_y, var_min_y = -np.inf, np.inf

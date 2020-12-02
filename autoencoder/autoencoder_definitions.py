@@ -66,6 +66,7 @@ class AutoEncoderBase(tf.keras.Model):
                  optimiser='sgd',
                  loss='mse',
                  hidden_activation='sigmoid',
+                 encoding_activation='linear',
                  final_activation='sigmoid',
                  learning_rate_schedule=None,
                  metric_distance_threshold=-1.0,
@@ -79,6 +80,7 @@ class AutoEncoderBase(tf.keras.Model):
             loss: any keras loss fuction (or string reference), or or
                 'unbalanced'/'composite_mse' (custom weighted loss functions)
             hidden_activation: activation function for hidden layers
+            encoding_activation: activation function for encoding layer
             final_activation: activation function for reconstruction layer
             learning_rate_schedule: instance of class derived from
                 LearningRateSchedule which can be called with the iteration
@@ -94,6 +96,7 @@ class AutoEncoderBase(tf.keras.Model):
         self.iteration = 0
         self.adversarial = adversarial
         self.adversarial_variance = adversarial_variance
+        self.encoding_activation = encoding_activation
 
         # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
@@ -180,15 +183,14 @@ class AutoEncoderBase(tf.keras.Model):
                 metrics=metrics
             )
 
-        encoder = tf.keras.models.Model(
-            self.input_image, outputs=self.encoding, name='encoder')
-        encoder.compile(
-            optimizer=optimiser(**opt_args),
-            loss={'encoding': 'binary_crossentropy'}
-        )
-        self.encoder = encoder
-
         if adversarial:
+            encoder = tf.keras.models.Model(
+                self.input_image, outputs=self.encoding, name='encoder')
+            encoder.compile(
+                optimizer=optimiser(**opt_args),
+                loss={'encoding': 'binary_crossentropy'}
+            )
+
             discriminator = define_discriminator(
                 (encoding_size,), 2 * encoding_size)
             discriminator.compile(
@@ -196,6 +198,8 @@ class AutoEncoderBase(tf.keras.Model):
                 loss=disc_loss_fn,
                 metrics=disc_loss_fn
             )
+
+            self.encoder = encoder
             self.discriminator = discriminator
             self.train_step = tf.function(self.adversarial_train_step)
             self.train_function = None
@@ -226,10 +230,6 @@ class AutoEncoderBase(tf.keras.Model):
                                   'AutoEncoderBase is intended for use as an '
                                   'abstract class and should not be explicitly'
                                   ' instantiated.')
-
-    def _make_train_function(self):
-        self.train_function = None
-        self.train_step = tf.function(self.adversarial_train_step)
 
     def get_config(self):
         """Overloaded method; see base class (tf.keras.Model)."""
@@ -311,6 +311,7 @@ class AutoEncoderBase(tf.keras.Model):
         prior_mean = float(tf.reduce_mean(prior_means))
         prior_variance = float(tf.reduce_mean(prior_variances))
 
+        # Let's get some measure of how good our discriminator/generator are
         real_probability = self.discriminator(prior_sample, training=False)
         fake_probability = self.discriminator(
             latent_representations, training=False)
@@ -321,7 +322,8 @@ class AutoEncoderBase(tf.keras.Model):
             'mean': mean_mean,
             'variance': mean_variance,
             'prior_mean': prior_mean,
-            'prior_variance': prior_variance
+            'prior_variance': prior_variance,
+            'latent_representations': latent_representations
         })
         self.iteration += 1
         return generator_metrics
@@ -440,13 +442,14 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
 
         x = layers.Flatten(data_format='channels_first', name='enc_flatten')(x)
 
-        encoding = layers.Dense(
-            encoding_size, name='encoding', activation='linear')(x)
+        x = layers.Dense(encoding_size)(x)
+
+        encoding = next(generate_activation_layers(
+            'encoding', self.encoding_activation, append_name_info=False))(x)
 
         x = layers.Dense(np.prod(final_shape), name='dec_dense')(encoding)
         x = next(conv_activation)(x)
         x = layers.Reshape(final_shape, name='dec_reshape')(x)
-        x = bn(x)
 
         x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)

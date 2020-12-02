@@ -13,6 +13,7 @@ import molgrid
 import numpy as np
 import tensorflow as tf
 from gnina_tensorflow_cpp import calculate_distances as cd
+from scipy import stats
 from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
@@ -108,7 +109,7 @@ def train(model, data_root, train_types, iterations, batch_size,
     if loss_log is None:
         loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
                    'nonzero_mean learning_rate prior_mean prior_variance ' \
-                   'latent_mean latent_variance\n'
+                   'latent_mean latent_variance ks_statistic ks_p_value\n'
     fields = len(loss_log.strip().split())
 
     if not silent and save_path is not None:
@@ -176,15 +177,25 @@ def train(model, data_root, train_types, iterations, batch_size,
                     prefix = key.replace('trimmed_nonzero_mae', '')
                     break
 
-        real_prob = np.mean(metrics.get('real_prob')[:, 1])
-        fake_prob = np.mean(metrics.get('fake_prob')[:, 1])
+        try:
+            real_prob = np.mean(metrics.get('real_prob')[:, 1])
+            fake_prob = np.mean(metrics.get('fake_prob')[:, 1])
+        except TypeError:
+            real_prob = -1
+            fake_prob = -1
+
+        latent_representations = metrics.get('latent_representations', None)
+        if latent_representations is not None:
+            ks_statistic, p_value = stats.kstest(
+                latent_representations.reshape((-1,)), stats.norm(
+                    loc=0.0, scale=np.sqrt(model.adversarial_variance)).cdf)
 
         disc_loss = metrics.get('disc_loss', -1)
         gen_loss = metrics.get('gen_loss', -1)
-        z_mean = metrics.get('mean')
-        z_var = metrics.get('variance')
-        prior_mean = metrics.get('prior_mean')
-        prior_variance = metrics.get('prior_variance')
+        z_mean = metrics.get('mean', -1)
+        z_var = metrics.get('variance', -1)
+        prior_mean = metrics.get('prior_mean', -1)
+        prior_variance = metrics.get('prior_variance', -1)
 
         zero_mae = metrics[prefix + 'trimmed_zero_mae']
         nonzero_mae = metrics[prefix + 'trimmed_nonzero_mae']
@@ -201,14 +212,16 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        #loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
+        # loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
         #           'nonzero_mean learning_rate prior_mean prior_variance ' \
         #           'latent_mean latent_variance\n'
 
         loss_str = ('{0} ' + ' '.join(
             ['{{{}:.4f}}'.format(i + 1) for i in range(fields - 1)])).format(
-            iteration, metrics['loss'], disc_loss, gen_loss, nonzero_mae, zero_mae,
-            mean_nonzero, lr, prior_mean, prior_variance, z_mean, z_var)
+            iteration, metrics['loss'], disc_loss, gen_loss, nonzero_mae,
+            zero_mae,
+            mean_nonzero, lr, prior_mean, prior_variance, z_mean, z_var,
+            ks_statistic, p_value)
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
@@ -230,10 +243,13 @@ def train(model, data_root, train_types, iterations, batch_size,
                 console_output += ('Probabilities (real | fake): '
                                    '({0:.4f} | {1:.4f})\nz-Mean: {2:.4f} | '
                                    'z-Var: {3:.4f} | p-Mean: {6:.4f} | '
-                                   'p-Var: {7:.4f} | Disc loss: {4:.4f} | '
-                                   'Gen loss: {8:.4f} | Learning rate: {5:.3e}').format(
+                                   'p-Var: {7:.4f}\n'
+                                   'Disc loss: {4:.4f} | '
+                                   'Gen loss: {8:.4f}\n'
+                                   'KS: {9:0.4f} | KS-p: {10:0.4f}\n'
+                                   'Learning rate: {5:.3e}\n').format(
                     real_prob, fake_prob, z_mean, z_var, disc_loss, lr,
-                    prior_mean, prior_variance, gen_loss)
+                    prior_mean, prior_variance, gen_loss, ks_statistic, p_value)
             else:
                 console_output += ('Learning rate: {0:.3e}').format(lr)
             if iteration == starting_iter:
