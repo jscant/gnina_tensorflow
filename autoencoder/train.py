@@ -106,8 +106,10 @@ def train(model, data_root, train_types, iterations, batch_size,
 
     # Are we loading previous loss history or starting afresh?
     if loss_log is None:
-        loss_log = 'iteration loss nonzero_mae zero_mae nonzero_mean ' \
-                   'close_mae close_nonzero_mae close_zero_mae learning_rate\n'
+        loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
+                   'nonzero_mean learning_rate prior_mean prior_variance ' \
+                   'latent_mean latent_variance\n'
+    fields = len(loss_log.strip().split())
 
     if not silent and save_path is not None:
         save_path = Path(save_path)
@@ -174,6 +176,16 @@ def train(model, data_root, train_types, iterations, batch_size,
                     prefix = key.replace('trimmed_nonzero_mae', '')
                     break
 
+        real_prob = np.mean(metrics.get('real_prob')[:, 1])
+        fake_prob = np.mean(metrics.get('fake_prob')[:, 1])
+
+        disc_loss = metrics.get('disc_loss', -1)
+        gen_loss = metrics.get('gen_loss', -1)
+        z_mean = metrics.get('mean')
+        z_var = metrics.get('variance')
+        prior_mean = metrics.get('prior_mean')
+        prior_variance = metrics.get('prior_variance')
+
         zero_mae = metrics[prefix + 'trimmed_zero_mae']
         nonzero_mae = metrics[prefix + 'trimmed_nonzero_mae']
         if isnan(nonzero_mae):
@@ -189,26 +201,19 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        loss_str = '{0} {1:0.5f} {2:0.5f} {3:0.5f} {4:0.5f}'.format(
-            iteration, metrics['loss'], nonzero_mae, zero_mae,
-            mean_nonzero)
-        if metric_distance_threshold > 0:
-            loss_str += ' {0:0.5f} {1:0.5f} {2:0.5f} {3:0.3e}'
-        else:
-            loss_str += ' {0} {1} {2} {3:0.3e}'
+        #loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
+        #           'nonzero_mean learning_rate prior_mean prior_variance ' \
+        #           'latent_mean latent_variance\n'
 
-        loss_str = loss_str.format(
-            metrics.get('close_mae', 'n/a'),
-            metrics.get('close_nonzero_mae', 'n/a'),
-            metrics.get('close_zero_mae', 'n/a'), lr)
+        loss_str = ('{0} ' + ' '.join(
+            ['{{{}:.4f}}'.format(i + 1) for i in range(fields - 1)])).format(
+            iteration, metrics['loss'], disc_loss, gen_loss, nonzero_mae, zero_mae,
+            mean_nonzero, lr, prior_mean, prior_variance, z_mean, z_var)
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
-
-        real_prob = metrics.get('real_prob', -1)
-        fake_prob = metrics.get('fake_prob', -1)
 
         if not iteration and not silent:
             print('\n')
@@ -223,8 +228,12 @@ def train(model, data_root, train_types, iterations, batch_size,
 
             if real_prob >= 0:
                 console_output += ('Probabilities (real | fake): '
-                                   '({0:.4f} | {1:.4f}) | Learning rate: '
-                                   '{2:.3e}').format(real_prob, fake_prob, lr)
+                                   '({0:.4f} | {1:.4f})\nz-Mean: {2:.4f} | '
+                                   'z-Var: {3:.4f} | p-Mean: {6:.4f} | '
+                                   'p-Var: {7:.4f} | Disc loss: {4:.4f} | '
+                                   'Gen loss: {8:.4f} | Learning rate: {5:.3e}').format(
+                    real_prob, fake_prob, z_mean, z_var, disc_loss, lr,
+                    prior_mean, prior_variance, gen_loss)
             else:
                 console_output += ('Learning rate: {0:.3e}').format(lr)
             if iteration == starting_iter:

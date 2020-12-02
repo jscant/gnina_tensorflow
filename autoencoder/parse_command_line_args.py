@@ -133,7 +133,14 @@ def pickup(path):
             'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
             'close_zero_mae': autoencoder_definitions.close_zero_mae,
             'proximity_mse': autoencoder_definitions.proximity_mse,
-            'SquaredError': autoencoder_definitions.SquaredError
+            'enc_loss_fn': autoencoder_definitions.enc_loss_fn,
+            'disc_loss_fn': autoencoder_definitions.disc_loss_fn,
+            'SquaredError': autoencoder_definitions.SquaredError,
+            'define_discriminator': autoencoder_definitions.define_discriminator,
+            'adversarial_train_step': tf.function(
+                autoencoder_definitions.AutoEncoderBase.adversarial_train_step),
+            'train_step': tf.function(
+                autoencoder_definitions.AutoEncoderBase.adversarial_train_step)
         }
     )
     return ae
@@ -244,6 +251,8 @@ def parse_command_line_args(test_or_train='train'):
                                  'more realistic.')
         parser.add_argument('--denoising', type=float, default=-1.0,
                             help='Rate of random zero-ing of inputs.')
+        parser.add_argument('--adversarial_varience', type=float,
+                            default=10.0)
     else:
         parser.add_argument(
             'load_model', type=str, action=LoadConfigTest, nargs='?',

@@ -17,43 +17,44 @@ import tensorflow_addons as tfa
 from tensorflow.keras import layers
 from tensorflow.python.eager import backprop
 from tensorflow.python.keras.engine import data_adapter
+from tensorflow.python.keras.models import Model
 
 from layers import dense, residual
 from layers.layer_functions import generate_activation_layers
 
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+crossentropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
 
-class Discriminator(tf.keras.Model):
-    """For discerning between real and reconstructed inputs."""
-    def __init__(self, input_shape):
-        input_image = layers.Input(input_shape, name='input_image')
+def define_discriminator(input_shape, hidden_size=None):
+    """For placing adversarial constraints on latent distribution p(z|x).
 
-        x = layers.MaxPooling3D(
-            pool_size=(2, 2, 2), strides=(2, 2, 2), padding='same',
-            data_format='channels_first')(input_image)
-        x = layers.Conv3D(
-            32, 3, activation='relu', padding='same', use_bias=False,
-            data_format='channels_first')(x)
+    Arguments:
+        input_shape: shape of the latent space
+        hidden_size: size of the two hidden dense layers (a good starting point
+            for this is the length of the latent vector)
 
-        for i in range(3):
-            final = True if i == 2 else False
-            x = dense.dense_block(x, 4, 'db_{}'.format(i + 1))
-            x = dense.transition_block(
-                x, 1.0, 'tb_{}'.format(i + 1), final=final)
+    Returns:
+        Uncompiled keras model which takes as input a latent vector (or
+        vector sampled from a prior distribution) and outputs two numbers
+        with the estimated probabilities of the input vector being sampled
+        from the latent distribution (0) true prior distribution (1).
+    """
+    if hidden_size is None:
+        hidden_size = input_shape[0]
+    input_image = layers.Input(input_shape, name='input_distribution')
+    x = layers.Dense(hidden_size)(input_image)
+    x = layers.LeakyReLU(alpha=0.1)(x)
+    x = layers.Dropout(0.5)(x)
+    x = layers.Dense(hidden_size)(x)
+    x = layers.LeakyReLU(alpha=0.1)(x)
+    x = layers.Dropout(0.5)(x)
 
-        x = layers.GlobalMaxPooling3D(data_format='channels_first')(x)
+    probabilities = layers.Dense(
+        2, activation='sigmoid', name='probabilities')(x)
 
-        probabilities = layers.Dense(
-            1, activation='sigmoid', name='probabilities')(x)
-
-        opt = tf.keras.optimizers.SGD(
-            lr=0.01, momentum=True, nesterov=True)
-
-        super().__init__(
-            inputs=input_image, outputs=probabilities, name='discriminator')
-        self.compile(optimizer=opt, loss='binary_crossentropy')
+    return Model(
+        inputs=input_image, outputs=probabilities, name='discriminator')
 
 
 class AutoEncoderBase(tf.keras.Model):
@@ -69,6 +70,7 @@ class AutoEncoderBase(tf.keras.Model):
                  learning_rate_schedule=None,
                  metric_distance_threshold=-1.0,
                  adversarial=False,
+                 adversarial_varience=10.0,
                  **opt_args):
         """Setup and compilation of autoencoder.
 
@@ -87,6 +89,11 @@ class AutoEncoderBase(tf.keras.Model):
 
         self.initialiser = tf.keras.initializers.HeNormal()  # weights init
         self.learning_rate_schedule = learning_rate_schedule
+        self.encoding_size = encoding_size
+        self.dims = dims
+        self.iteration = 0
+        self.adversarial = adversarial
+        self.adversarial_varience = adversarial_varience
 
         # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
@@ -120,9 +127,8 @@ class AutoEncoderBase(tf.keras.Model):
             inputs.append(self.frac)
 
         super().__init__(
-            inputs=inputs,
-            outputs=[self.reconstruction, self.encoding]
-        )
+            inputs=inputs, outputs=[self.reconstruction, self.encoding],
+            name='autoencoder')
 
         metrics = {
             'reconstruction': [mae, nonzero_mae, zero_mse,
@@ -174,10 +180,25 @@ class AutoEncoderBase(tf.keras.Model):
                 metrics=metrics
             )
 
+        encoder = tf.keras.models.Model(
+            self.input_image, outputs=self.encoding, name='encoder')
+        encoder.compile(
+            optimizer=optimiser(**opt_args),
+            loss={'encoding': 'binary_crossentropy'}
+        )
+        self.encoder = encoder
+
         if adversarial:
-            self.discriminator = Discriminator(dims)
+            discriminator = define_discriminator(
+                (encoding_size,), 2 * encoding_size)
+            discriminator.compile(
+                optimizer=optimiser(**opt_args),
+                loss=disc_loss_fn,
+                metrics=disc_loss_fn
+            )
+            self.discriminator = discriminator
             self.train_step = tf.function(self.adversarial_train_step)
-        self.train_function = None
+            self.train_function = None
 
     @abstractmethod
     def _construct_layers(self, dims, encoding_size, hidden_activation,
@@ -206,12 +227,20 @@ class AutoEncoderBase(tf.keras.Model):
                                   'abstract class and should not be explicitly'
                                   ' instantiated.')
 
+    def _make_train_function(self):
+        self.train_function = None
+        self.train_step = tf.function(self.adversarial_train_step)
+
     def get_config(self):
         """Overloaded method; see base class (tf.keras.Model)."""
         config = super().get_config()
         config.update({'learning_rate_schedule': self.learning_rate_schedule,
-                       'train_step': self.train_step,
-                       })
+                       'train_step': self.train_step})
+        if self.adversarial:
+            config.update({
+                'adversarial_train_step': tf.function(
+                    self.adversarial_train_step),
+                'train_step': tf.function(self.adversarial_train_step)})
         try:
             d = self.get_layer('distances')
         except ValueError:
@@ -220,6 +249,7 @@ class AutoEncoderBase(tf.keras.Model):
             config.update({'distances': d})
         try:
             config.update({'discriminator': self.discriminator})
+            config.update({'encoder': self.encoder})
         except AttributeError:
             pass
         return config
@@ -227,52 +257,73 @@ class AutoEncoderBase(tf.keras.Model):
     def adversarial_train_step(self, data):
         data = data_adapter.expand_1d(data)
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
-        x = x.get('input_image')
-        with backprop.GradientTape() as reconstruction_tape, \
-                backprop.GradientTape() as discriminator_tape, \
-                backprop.GradientTape() as generator_tape:
-            reconstructions, _ = self(x, training=True)
-            mask = tf.cast(tf.less(reconstructions, 0.0025), tf.float32)
-            masked_reconstructions = mask * reconstructions
-
-            real_probability = self.discriminator(x, training=True)
-            fake_probability = self.discriminator(
-                masked_reconstructions, training=True)
-
-            nz_mae = nonzero_mae(x, reconstructions)
-            z_mae = zero_mae(x, reconstructions)
-
+        with backprop.GradientTape() as reconstruction_tape:
+            reconstructions, latent_representations = self(x, training=True)
+            frac = x.get('frac', sample_weight)
             reconstruction_loss = self.compiled_loss(
-                y, reconstructions, sample_weight,
+                y, reconstructions, frac,
                 regularization_losses=self.losses)
-            generator_loss = fake_quality(
-                fake_probability
-            )
-            discriminator_loss = self.discriminator.compiled_loss(
-                tf.ones_like(real_probability), real_probability, sample_weight,
-                regularization_losses=self.discriminator.losses
-            )
-            discriminator_loss += self.discriminator.compiled_loss(
-                tf.zeros_like(fake_probability), fake_probability,
-                sample_weight, regularization_losses=self.discriminator.losses
-            )
-
         self.optimizer.minimize(
             reconstruction_loss, self.trainable_variables,
             tape=reconstruction_tape)
-        if nz_mae < 0.06 and z_mae < 0.005:
-            self.optimizer.minimize(
-                generator_loss, self.trainable_variables,
-                tape=generator_tape)
-            self.discriminator.optimizer.minimize(
-                discriminator_loss, self.discriminator.trainable_variables,
-                tape=discriminator_tape)
         self.compiled_metrics.update_state(y, reconstructions, sample_weight)
         generator_metrics = {m.name: m.result() for m in self.metrics}
+        x = x.get('input_image')
+        with backprop.GradientTape() as disc_tape:
+            batch_size = x.shape[0]
+            prior_sample = tf.random.normal(
+                (batch_size, self.encoding_size), 0.0,
+                np.sqrt(self.adversarial_varience), dtype=tf.float32,
+                name='prior_sample'
+            )
+            latent_classifications = self.discriminator(
+                latent_representations, training=True)
+            prior_classifications = self.discriminator(
+                prior_sample, training=True)
+            disc_loss = self.discriminator.compiled_loss(
+                prior_classifications, latent_classifications,
+                sample_weight, regularization_losses=self.discriminator.losses)
+        self.discriminator.optimizer.minimize(
+            disc_loss, self.discriminator.trainable_variables, tape=disc_tape)
+        self.discriminator.compiled_metrics.update_state(
+            prior_classifications, latent_classifications, sample_weight)
+        generator_metrics.update({'disc_{}'.format(m.name): m.result() for m in
+                                  self.discriminator.metrics})
+
+        with backprop.GradientTape() as enc_tape:
+            encodings = self.encoder(x, training=True)
+            classifications = self.discriminator(encodings, training=False)
+            enc_loss = self.encoder.compiled_loss(
+                tf.ones_like(classifications), classifications, sample_weight,
+                regularization_losses=self.encoder.losses)
+        self.encoder.optimizer.minimize(
+            enc_loss, self.encoder.trainable_variables, tape=enc_tape)
+        self.encoder.compiled_metrics.update_state(
+            tf.ones_like(classifications), classifications)
+        generator_metrics.update(
+            {'gen_{}'.format(m.name): m.result() for m in self.encoder.metrics})
+
+        mean, variance = tf.nn.moments(latent_representations, axes=[1])
+        mean_mean = float(tf.reduce_mean(mean))
+        mean_variance = float(tf.reduce_mean(variance))
+
+        prior_means, prior_variances = tf.nn.moments(prior_sample, axes=[1])
+        prior_mean = float(tf.reduce_mean(prior_means))
+        prior_variance = float(tf.reduce_mean(prior_variances))
+
+        real_probability = self.discriminator(prior_sample, training=False)
+        fake_probability = self.discriminator(
+            latent_representations, training=False)
+
         generator_metrics.update({
-            'fake_prob': float(tf.reduce_mean(fake_probability)),
-            'real_prob': float(tf.reduce_mean(real_probability))
+            'fake_prob': fake_probability,
+            'real_prob': real_probability,
+            'mean': mean_mean,
+            'variance': mean_variance,
+            'prior_mean': prior_mean,
+            'prior_variance': prior_variance
         })
+        self.iteration += 1
         return generator_metrics
 
 
@@ -361,60 +412,53 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
                           final_activation):
         """Overloaded method; see base class (AutoeEncoderBase)"""
 
-        encoding_activation_layer = next(generate_activation_layers(
-            'encoding', 'linear', append_name_info=False))
-
         conv_activation = generate_activation_layers(
-            'conv', hidden_activation, append_name_info=True)
+            'enc_conv', hidden_activation, append_name_info=True)
 
         input_image = layers.Input(shape=dims, dtype=tf.float32,
                                    name='input_image')
 
         conv_args = {'padding': 'same',
                      'data_format': 'channels_first',
-                     'use_bias': False}
+                     'use_bias': False, 'kernel_initializer': self.initialiser}
 
-        bn_axis = 1
+        bn = lambda x: layers.BatchNormalization(axis=1, epsilon=1.001e-5)(x)
 
         x = layers.Conv3D(1024, 3, 2, **conv_args)(input_image)
         x = next(conv_activation)(x)
-        x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5)(x)
+        x = bn(x)
 
         x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
-        x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5)(x)
+        x = bn(x)
 
         x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
-        x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5)(x)
+        x = bn(x)
+
         final_shape = x.shape[1:]
 
-        x = layers.Flatten(data_format='channels_first')(x)
+        x = layers.Flatten(data_format='channels_first', name='enc_flatten')(x)
 
-        x = layers.Dense(encoding_size)(x)
-        encoding = encoding_activation_layer(x)
+        encoding = layers.Dense(
+            encoding_size, name='encoding', activation='linear')(x)
 
-        x = layers.Dense(np.prod(final_shape))(encoding)
+        x = layers.Dense(np.prod(final_shape), name='dec_dense')(encoding)
         x = next(conv_activation)(x)
-        x = layers.Reshape(final_shape)(x)
+        x = layers.Reshape(final_shape, name='dec_reshape')(x)
+        x = bn(x)
 
         x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
-        x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5)(x)
+        x = bn(x)
 
         x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
-        x = layers.BatchNormalization(
-            axis=bn_axis, epsilon=1.001e-5)(x)
+        x = bn(x)
 
-        reconstruction = layers.Conv3DTranspose(dims[0], 3, 2,
-                                                name='reconstruction',
-                                                activation=final_activation,
-                                                **conv_args)(x)
+        reconstruction = layers.Conv3DTranspose(
+            dims[0], 3, 2, activation=final_activation, name='reconstruction',
+            **conv_args)(x)
 
         return input_image, encoding, reconstruction
 
@@ -540,13 +584,6 @@ class SquaredError(tf.keras.losses.Loss):
                               axis=self.reduction_axis)
 
 
-def fake_quality(discriminator_predictions):
-    """"""
-    similarity = crossentropy(tf.ones_like(discriminator_predictions),
-                              discriminator_predictions)
-    return similarity
-
-
 def nonzero_mse(target, reconstruction):
     """Mean squared error for non-zero values in the target matrix
 
@@ -581,53 +618,6 @@ def zero_mse(target, reconstruction):
     mask = tf.cast(tf.equal(target, 0), tf.float32)
     masked_difference = (target - reconstruction) * mask
     return tf.square(masked_difference)
-
-
-class CompositeMse(tf.keras.losses.Loss):
-    """Weighted mean squared error of nonzero-only and zero-only inputs.
-
-    Finds the MSE between the autoencoder reconstruction and the nonzero
-    entries of the input, the MSE between the reconstruction and the zero
-    entries of the input and gives the weighted average of the two.
-    """
-
-    def __init__(self, reduction=tf.keras.losses.Reduction.AUTO,
-                 name='composite_mse', reduction_axis=None):
-        super().__init__(reduction=reduction, name=name)
-        reduction_axis = reduction_axis if reduction_axis is not None else []
-        self.reduction_axis = reduction_axis
-
-    def call(self, y_true, y_pred):
-        """Overridden method; see base class (tf.keras.loss.Loss).
-
-        Get the point-wise weighted squared difference between two tensors.
-
-        Arguments:
-            y_true: input tensor
-            y_pred: output tensor of the autoencoder
-
-        Returns:
-            Average weighted by:
-                ratio/(1+ratio)*nonzero_mse + 1/(1+ratio)*zero_mse
-            where nonzero_mse and zero_mse are the MSE for the nonzero and zero
-            parts of target respectively.
-        """
-        nz_mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
-        nz_mask_sum = tf.reduce_sum(nz_mask)
-        nz_masked_difference = tf.abs(y_true - y_pred) * nz_mask
-        nz_mean = tf.reduce_sum(nz_masked_difference) / nz_mask_sum
-
-        z_mask = tf.cast(tf.equal(y_true, 0), tf.float32)
-        z_mask_sum = tf.reduce_sum(z_mask)
-        z_masked_difference = tf.abs(y_true - y_pred) * z_mask
-        z_mean = tf.reduce_sum(z_masked_difference) / z_mask_sum
-
-        ratio = nz_mean / z_mean
-        frac = tf.reduce_mean(tf.divide(ratio, 1. + ratio))
-
-        return tf.math.add(
-            tf.math.multiply(frac, nonzero_mse(y_true, y_pred)),
-            tf.math.multiply(1. - frac, zero_mse(y_true, y_pred)))
 
 
 def composite_mse(target, reconstruction, ratio):
@@ -919,3 +909,17 @@ def trimmed_zero_mse(target, reconstruction):
     trimmed_target = tf.slice(target, begin, end)
     trimmed_reconstruction = tf.slice(reconstruction, begin, end)
     return zero_mse(trimmed_target, trimmed_reconstruction)
+
+
+def disc_loss_fn(prior_classifications, latent_classifications):
+    prior_loss = crossentropy(
+        tf.ones_like(prior_classifications), prior_classifications)
+    latent_loss = crossentropy(
+        tf.zeros_like(latent_classifications), latent_classifications)
+    return (prior_loss + latent_loss) / 2
+
+
+def enc_loss_fn(latent_classifications):
+    enc_loss = crossentropy(
+        tf.ones(latent_classifications), latent_classifications)
+    return enc_loss

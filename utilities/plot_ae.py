@@ -70,7 +70,7 @@ def get_loss_logs(filenames):
         return list(Path('.').rglob('**/loss_log.txt'))
 
 
-def extract_data(loss_logs, fields):
+def extract_data(loss_logs, fields, max_x=-1):
     """Extract numerical logs from loss logs.
 
     Arguments:
@@ -95,13 +95,16 @@ def extract_data(loss_logs, fields):
         print(exp)
         for field in fields:
             try:
-                data[field][exp] = df[field].to_numpy()
+                if max_x > 0:
+                    data[field][exp] = df[field].to_numpy()[:max_x]
+                else:
+                    data[field][exp] = df[field].to_numpy()
             except KeyError:
                 raise RuntimeError('{} not found.'.format(field))
     return data
 
 
-def plot_ax(data, field, gap, ax):
+def plot_ax(data, field, gap, ax, colours=None):
     """Plot all data associated with a given field for all autoencoders.
 
     Arguments:
@@ -116,11 +119,16 @@ def plot_ax(data, field, gap, ax):
     """
     max_y = -np.inf
     min_y = np.inf
-    for exp, y in data[field].items():
+    for idx, (exp, y) in enumerate(data[field].items()):
+        line_marker = '-'
+        if isinstance(colours, list):
+            if idx < len(colours):
+                line_marker = colours[idx] + line_marker
         x, condensed_y = condense(y, gap)
-        ax.plot(x, condensed_y, '-', label=exp)
-        max_y = max(max_y, np.amax(condensed_y))
-        min_y = min(min_y, np.amin(condensed_y))
+        trunc_x = len(x) // 10
+        ax.plot(x, condensed_y, line_marker, label=exp)
+        max_y = max(max_y, np.amax(condensed_y[trunc_x:]))
+        min_y = min(min_y, np.amin(condensed_y[trunc_x:]))
 
     if min_y >= 0:
         ax.set_ylim([-0.05 * min_y, 1.05 * max_y])
@@ -132,10 +140,10 @@ def plot_ax(data, field, gap, ax):
     return max_y, min_y
 
 
-def plot(filenames, fields, gap, upload=False):
+def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
     """Plot data from all fields in subplots of same fig."""
     loss_logs = get_loss_logs(filenames)
-    data = extract_data(loss_logs, fields)
+    data = extract_data(loss_logs, fields, max_x)
     n_fields = len(fields)
     if n_fields == 1:
         fig, ax = plt.subplots(1, 1, figsize=(8, 5))
@@ -152,7 +160,7 @@ def plot(filenames, fields, gap, upload=False):
             ax = axes[row, col]
         else:
             ax = axes[col]
-        max_y, min_y = plot_ax(data, field, gap, ax)
+        max_y, min_y = plot_ax(data, field, gap, ax, colours=colours)
         ax_dict[field] = (ax, max_y, min_y)
     mean_max_y, mean_min_y = -np.inf, np.inf
     var_max_y, var_min_y = -np.inf, np.inf
@@ -163,6 +171,8 @@ def plot(filenames, fields, gap, upload=False):
         if field.endswith('_variance'):
             var_max_y = max(var_max_y, ax_dict[field][1])
             var_min_y = min(var_min_y, ax_dict[field][2])
+
+    var_max_y = min(var_max_y, 50)
     for field in fields:
         if field.endswith('_mean'):
             if mean_min_y >= 0:
@@ -195,10 +205,12 @@ if __name__ == '__main__':
     parser.add_argument('--gap', '-g', type=int, default=100, required=False)
     parser.add_argument('--fields', '-f', nargs='*', type=str,
                         default='nonzero_mae')
+    parser.add_argument('--colours', '-c', nargs='*', type=str, default=None)
 
     args = parser.parse_args()
     filenames = args.filename
     fields = [args.fields] if isinstance(args.fields, str) else args.fields
+    cols = [args.colours] if isinstance(args.colours, str) else args.colours
     output_fname = args.output_name
     max_x = args.max_x
     upload = args.upload if upload_to_imgur is not None else False
@@ -206,4 +218,4 @@ if __name__ == '__main__':
 
     plt.rc('font', family='serif')
 
-    plot(filenames, fields, gap=gap, upload=upload)
+    plot(filenames, fields, gap=gap, max_x=max_x, upload=upload, colours=cols)
