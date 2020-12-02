@@ -70,7 +70,7 @@ class AutoEncoderBase(tf.keras.Model):
                  learning_rate_schedule=None,
                  metric_distance_threshold=-1.0,
                  adversarial=False,
-                 adversarial_varience=10.0,
+                 adversarial_variance=10.0,
                  **opt_args):
         """Setup and compilation of autoencoder.
 
@@ -93,7 +93,7 @@ class AutoEncoderBase(tf.keras.Model):
         self.dims = dims
         self.iteration = 0
         self.adversarial = adversarial
-        self.adversarial_varience = adversarial_varience
+        self.adversarial_variance = adversarial_variance
 
         # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
@@ -273,7 +273,7 @@ class AutoEncoderBase(tf.keras.Model):
             batch_size = x.shape[0]
             prior_sample = tf.random.normal(
                 (batch_size, self.encoding_size), 0.0,
-                np.sqrt(self.adversarial_varience), dtype=tf.float32,
+                np.sqrt(self.adversarial_variance), dtype=tf.float32,
                 name='prior_sample'
             )
             latent_classifications = self.discriminator(

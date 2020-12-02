@@ -251,7 +251,7 @@ def parse_command_line_args(test_or_train='train'):
                                  'more realistic.')
         parser.add_argument('--denoising', type=float, default=-1.0,
                             help='Rate of random zero-ing of inputs.')
-        parser.add_argument('--adversarial_varience', type=float,
+        parser.add_argument('--adversarial_variance', type=float,
                             default=10.0)
     else:
         parser.add_argument(
