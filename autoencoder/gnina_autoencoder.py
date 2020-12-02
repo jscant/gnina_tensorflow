@@ -146,7 +146,7 @@ def main():
             metric_distance_threshold=args.metric_distance_threshold,
             learning_rate_schedule=lrs,
             adversarial=args.adversarial,
-            adversarial_variance=args.adverserial_variance,
+            adversarial_variance=args.adversarial_variance,
             **opt_args)
     else:
         ae.learning_rate_schedule = lrs
