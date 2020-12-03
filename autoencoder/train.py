@@ -188,7 +188,7 @@ def train(model, data_root, train_types, iterations, batch_size,
         if latent_representations is not None:
             ks_statistic, p_value = stats.kstest(
                 latent_representations.reshape((-1,)), stats.norm(
-                    loc=10.0, scale=np.sqrt(model.adversarial_variance)).cdf)
+                    loc=0.0, scale=np.sqrt(model.adversarial_variance)).cdf)
         else:
             ks_statistic, p_value = -0.1, -0.1
 

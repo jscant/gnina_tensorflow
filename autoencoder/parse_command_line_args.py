@@ -228,6 +228,9 @@ def parse_command_line_args(test_or_train='train'):
             '--encoding_activation', type=str, required=False, default='linear',
             help='Activation function for encoding layers')
         parser.add_argument(
+            '--conv_filters', type=int, required=False, default=1024,
+            help='Filters per convolutional layer')
+        parser.add_argument(
             '--final_activation', type=str, required=False, default='sigmoid')
         parser.add_argument('--binary_mask', action='store_true')
         parser.add_argument('--metric_distance_threshold', type=float,

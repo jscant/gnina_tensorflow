@@ -144,6 +144,7 @@ def main():
             hidden_activation=args.hidden_activation,
             final_activation=args.final_activation,
             encoding_activation=args.encoding_activation,
+            conv_filters=args.conv_filters,
             metric_distance_threshold=args.metric_distance_threshold,
             learning_rate_schedule=lrs,
             adversarial=args.adversarial,
