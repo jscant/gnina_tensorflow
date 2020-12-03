@@ -426,15 +426,15 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
 
         bn = lambda x: layers.BatchNormalization(axis=1, epsilon=1.001e-5)(x)
 
-        x = layers.Conv3D(1024, 3, 2, **conv_args)(input_image)
+        x = layers.Conv3D(512, 3, 2, **conv_args)(input_image)
         x = next(conv_activation)(x)
         x = bn(x)
 
-        x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(512, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = bn(x)
 
-        x = layers.Conv3D(1024, 3, 2, **conv_args)(x)
+        x = layers.Conv3D(512, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = bn(x)
 
@@ -451,11 +451,11 @@ class MultiLayerAutoEncoder(AutoEncoderBase):
         x = next(conv_activation)(x)
         x = layers.Reshape(final_shape, name='dec_reshape')(x)
 
-        x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(512, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = bn(x)
 
-        x = layers.Conv3DTranspose(1024, 3, 2, **conv_args)(x)
+        x = layers.Conv3DTranspose(512, 3, 2, **conv_args)(x)
         x = next(conv_activation)(x)
         x = bn(x)
 

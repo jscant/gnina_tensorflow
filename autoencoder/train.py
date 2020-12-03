@@ -108,7 +108,7 @@ def train(model, data_root, train_types, iterations, batch_size,
     # Are we loading previous loss history or starting afresh?
     if loss_log is None:
         loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
-                   'nonzero_mean learning_rate prior_mean prior_variance ' \
+                   'nonzero_mean learning_rate ' \
                    'latent_mean latent_variance ks_statistic ks_p_value\n'
     fields = len(loss_log.strip().split())
 
@@ -188,14 +188,14 @@ def train(model, data_root, train_types, iterations, batch_size,
         if latent_representations is not None:
             ks_statistic, p_value = stats.kstest(
                 latent_representations.reshape((-1,)), stats.norm(
-                    loc=0.0, scale=np.sqrt(model.adversarial_variance)).cdf)
+                    loc=10.0, scale=np.sqrt(model.adversarial_variance)).cdf)
+        else:
+            ks_statistic, p_value = -0.1, -0.1
 
         disc_loss = metrics.get('disc_loss', -1)
         gen_loss = metrics.get('gen_loss', -1)
         z_mean = metrics.get('mean', -1)
         z_var = metrics.get('variance', -1)
-        prior_mean = metrics.get('prior_mean', -1)
-        prior_variance = metrics.get('prior_variance', -1)
 
         zero_mae = metrics[prefix + 'trimmed_zero_mae']
         nonzero_mae = metrics[prefix + 'trimmed_nonzero_mae']
@@ -212,16 +212,10 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        # loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
-        #           'nonzero_mean learning_rate prior_mean prior_variance ' \
-        #           'latent_mean latent_variance\n'
-
         loss_str = ('{0} ' + ' '.join(
             ['{{{}:.4f}}'.format(i + 1) for i in range(fields - 1)])).format(
             iteration, metrics['loss'], disc_loss, gen_loss, nonzero_mae,
-            zero_mae,
-            mean_nonzero, lr, prior_mean, prior_variance, z_mean, z_var,
-            ks_statistic, p_value)
+            zero_mae, mean_nonzero, lr, z_mean, z_var, ks_statistic, p_value)
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
@@ -241,17 +235,15 @@ def train(model, data_root, train_types, iterations, batch_size,
 
             if real_prob >= 0:
                 console_output += ('Probabilities (real | fake): '
-                                   '({0:.4f} | {1:.4f})\nz-Mean: {2:.4f} | '
-                                   'z-Var: {3:.4f} | p-Mean: {6:.4f} | '
-                                   'p-Var: {7:.4f}\n'
-                                   'Disc loss: {4:.4f} | '
-                                   'Gen loss: {8:.4f}\n'
-                                   'KS: {9:0.4f} | KS-p: {10:0.4f}\n'
+                                   '({0:.4f} | {1:.4f})\n'
+                                   'z-Mean: {2} | z-Var: {3:.4f}\n'
+                                   'Disc loss: {4:.4f} | Gen loss: {6:.4f}\n'
+                                   'KS: {7:0.4f} | KS-p: {8:0.4f}\n'
                                    'Learning rate: {5:.3e}\n').format(
-                    real_prob, fake_prob, z_mean, z_var, disc_loss, lr,
-                    prior_mean, prior_variance, gen_loss, ks_statistic, p_value)
+                    real_prob, fake_prob, '{0:.4f}'.format(z_mean)[:6], z_var,
+                    disc_loss, lr, gen_loss, ks_statistic, p_value)
             else:
-                console_output += ('Learning rate: {0:.3e}').format(lr)
+                console_output += 'Learning rate: {0:.3e}'.format(lr)
             if iteration == starting_iter:
                 print()
             print_with_overwrite(console_output)
