@@ -35,6 +35,23 @@ class Timer:
         self.interval = self.end - self.start
 
 
+def condense(arr, gap=100):
+    """Condense large arrays into averages over a given window size.
+
+    Arguments:
+        arr: numpy array or list of numbers
+        gap: size of window over which to average array
+
+    Returns:
+        Tuple with new condensed counts (x) and smaller array (y) which is the
+        mean of every <gap> values.
+    """
+    arr = np.array(arr)
+    x = np.arange(0, len(arr), step=gap)
+    y = np.array([np.mean(arr[n:n + gap]) for n in range(0, len(arr), gap)])
+    return x, y
+
+
 def wipe_directory(directory):
     """Recursively removes all items in a directory, then the directory itself.
 

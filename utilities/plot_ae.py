@@ -39,23 +39,7 @@ try:
 except ImportError:
     upload_to_imgur = None
 from matplotlib import pyplot as plt
-
-
-def condense(arr, gap=100):
-    """Condense large arrays into averages over a given window size.
-
-    Arguments:
-        arr: numpy array or list of numbers
-        gap: size of window over which to average array
-
-    Returns:
-        Tuple with new condensed counts (x) and smaller array (y) which is the
-        mean of every <gap> values.
-    """
-    arr = np.array(arr)
-    x = np.arange(0, len(arr), step=gap)
-    y = np.array([np.mean(arr[n:n + gap]) for n in range(0, len(arr), gap)])
-    return x, y
+from utilities.gnina_functions import condense
 
 
 def get_loss_logs(filenames):

@@ -3,8 +3,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from jack.utilities import condense, upload_to_imgur
+
+try:
+    from jack.utilities import upload_to_imgur
+except ImportError:
+    upload_to_imgur = None
 from matplotlib import pyplot as plt
+from utilities.gnina_functions import condense
 
 parser = argparse.ArgumentParser()
 parser.add_argument('fname', type=str, default='~/Desktop/mem.txt')
@@ -46,7 +51,7 @@ for idx, (pid, info) in enumerate(results.items()):
         ax = axes[row, col]
     else:
         ax = axes[row]
-    ax.plot(info[0], info[1], label=pid)
+    ax.plot(info[0], info[1], label='Process ID: {}'.format(pid))
     ax.set_title('Increases per hour: {0:.4f} GB'.format(
         info[2]))
     ax.ticklabel_format(useOffset=False, style='plain')
@@ -56,5 +61,5 @@ for idx, (pid, info) in enumerate(results.items()):
     ax.grid()
 plt.savefig('mem.png')
 
-if args.upload:
+if args.upload and upload_to_imgur is not None:
     print(upload_to_imgur('mem.png'))
