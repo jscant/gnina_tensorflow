@@ -34,20 +34,23 @@ if __name__ == '__main__':
     parser.add_argument(
         '--output_fname', '-o', type=str, default='~/Desktop/mem.txt')
     args = parser.parse_args()
-
-    pids = get_processes(args.user)
     output_fname = Path(args.output_fname).expanduser().resolve()
-    with open(output_fname, 'w') as f:
-        f.write(' '.join(pids) + '\n')
+
+    usages = ''
+    pids = []
     while True:
+        pids = sorted(list(set(get_processes(args.user) + pids)))
+        titles = ' '.join(pids) + '\n'
         s = ''
         for pid in pids:
             try:
                 mem_usage = str(get_mem_usage(pid))
             except subprocess.CalledProcessError:
-                print('Could not find process {}. Aborting.'.format(pid))
-                exit(0)
-            s += mem_usage + ' '
-        with open(output_fname, 'a') as f:
-            f.write(s[:-1] + '\n')
+                pass
+            else:
+                s += mem_usage + ' '
+        if len(pids):
+            usages += s[:-1] + '\n'
+            with open(output_fname, 'w') as f:
+                f.write(titles + usages[:-1] + '\n')
         sleep(1)
