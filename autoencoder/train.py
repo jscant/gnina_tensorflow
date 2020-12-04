@@ -134,6 +134,8 @@ def train(model, data_root, train_types, iterations, batch_size,
                     wipe_directory(previous_checkpoint)
                 previous_checkpoint = checkpoint_path
 
+        K.clear_session()
+
         # Use learning rate scheduler to find learning rate
         if isinstance(model.learning_rate_schedule,
                       tf.keras.optimizers.schedules.LearningRateSchedule):
