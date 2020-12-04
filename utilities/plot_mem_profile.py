@@ -42,7 +42,7 @@ if n_fields == 1:
 else:
     cols = (n_fields + 1) // 2
     width = cols * 10
-    fig, axes = plt.subplots(2, cols, figsize=(width, 10), sharex='all')
+    fig, axes = plt.subplots(2, cols, figsize=(width, 10))
 
 for idx, (pid, info) in enumerate(results.items()):
     col = idx // 2
