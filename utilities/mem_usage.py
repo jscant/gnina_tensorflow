@@ -18,12 +18,15 @@ def get_processes(user=None):
     """Returns process ids of running python3 processes owned by user."""
     pids = []
     for pid in psutil.pids():
-        p = psutil.Process(pid)
-        if p.name() == 'python3' and \
-                'mem_usage.py' not in ' '.join(p.cmdline()) and \
-                'memory.py' not in ' '.join(p.cmdline()) and \
-                p.username() == user and len(p.cmdline()) > 1:
-            pids.append(str(pid))
+        try:
+            p = psutil.Process(pid)
+            if p.name() == 'python3' and \
+                    'mem_usage.py' not in ' '.join(p.cmdline()) and \
+                    'memory.py' not in ' '.join(p.cmdline()) and \
+                    p.username() == user and len(p.cmdline()) > 1:
+                pids.append(str(pid))
+        except psutil.NoSuchProcess:
+            continue
     return pids
 
 
