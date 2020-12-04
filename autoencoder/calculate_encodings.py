@@ -6,7 +6,6 @@ Created on Mon Aug 10 11:11:57 2020
 @author: scantleb
 @brief: Use trained autoencoder to calculate encodings for gnina inputs.
 """
-import os
 import time
 from pathlib import Path
 
@@ -15,6 +14,7 @@ import tensorflow as tf
 
 from autoencoder.parse_command_line_args import parse_command_line_args
 from utilities import gnina_embeddings_pb2, gnina_functions
+from utilities.gnina_functions import write_process_info
 from utilities.reorder_types_file import reorder
 
 
@@ -114,9 +114,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     encodings_dir.mkdir(exist_ok=True, parents=True)
 
     # Logging process ID is useful for memory profiling (see utilities)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
-        f.write('{0} {1}\n'.format(os.getpid(), save_path))
+    write_process_info(__file__, save_path)
 
     delete_types_file, types_file, paths = get_paths(types_file)
 

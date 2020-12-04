@@ -20,7 +20,7 @@ from autoencoder import autoencoder_definitions, parse_command_line_args, \
     schedules
 from autoencoder.calculate_encodings import calculate_encodings
 from autoencoder.train import train
-from utilities.gnina_functions import Timer, get_dims
+from utilities.gnina_functions import Timer, get_dims, write_process_info
 
 
 def main():
@@ -163,9 +163,7 @@ def main():
             ae, save_path / 'model.png', show_shapes=True)
 
     # Logging process ID is useful for memory profiling (see utilities)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
-        f.write('{0} {1}\n'.format(os.getpid(), save_path))
+    write_process_info(__file__, save_path)
 
     losses, nonzero_losses, zero_losses = train(
         ae,

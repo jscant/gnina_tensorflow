@@ -6,6 +6,7 @@ Created on Fri Jul 10 14:47:44 2020
 """
 
 import math
+import os
 import shutil
 import time
 from pathlib import Path
@@ -33,6 +34,20 @@ class Timer:
     def __exit__(self, *args):
         self.end = time.time()
         self.interval = self.end - self.start
+
+
+def write_process_info(script_fname, save_path):
+    """Logging process ID is useful for memory profiling (see utilities).
+
+    Arguments:
+        script_fname: name of calling script (should always be __file__)
+        save_path: working directory for particular experiment run
+    """
+    gnina_tf_root = Path(script_fname).expanduser().resolve().parents[1]
+    save_path = Path(save_path).expanduser().resolve()
+    slurm_job_id = os.getenv('SLURM_JOB_ID', '')
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1} {2}\n'.format(os.getpid(), save_path, slurm_job_id))
 
 
 def condense(arr, gap=100):

@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 from utilities.gnina_functions import condense
 
 
-def extract_working_dir(pid):
+def extract_working_dir_and_slurm_id(pid):
     """Retrieve the working directory of a process (pid) if present in logs."""
     pid = str(pid)
     gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
@@ -24,7 +24,9 @@ def extract_working_dir(pid):
         for line in f.readlines():
             chunks = line.split()
             if len(chunks) == 2 and chunks[0] == pid:
-                return Path(chunks[1])
+                return Path(chunks[1]), None
+            if len(chunks) == 3 and chunks[0] == pid:
+                return Path(chunks[1]), chunks[2]
 
 
 if __name__ == '__main__':
@@ -48,16 +50,17 @@ if __name__ == '__main__':
         x, y = condense(vals, gap=5)
         y /= 1e6
 
-        working_dir = extract_working_dir(pid)
+        working_dir, slurm_job_id = extract_working_dir_and_slurm_id(pid)
         if working_dir is None:
             label = pid
         else:
             label = '/'.join(str(
-                working_dir).split('/')[-4:-1]) + ' (PID={})'.format(pid)
+                working_dir).split('/')[-4:-1]) + ' (Slurm job ID={})'.format(
+                slurm_job_id)
 
         results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
         print('Increase per hour ({1}): {0:.3f} GB'.format(
-            3600 * (y[-1] - y[0]) / len(values), pid))
+            3600 * (y[-1] - y[0]) / len(values), slurm_job_id))
 
     n_fields = len(results)
     if n_fields == 1:

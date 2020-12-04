@@ -14,7 +14,6 @@ gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
-import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -25,10 +24,10 @@ from autoencoder.autoencoder_definitions import zero_mse, nonzero_mse, \
     composite_mse, nonzero_mae, zero_mae, trimmed_nonzero_mae, trimmed_zero_mae, \
     close_mae, close_nonzero_mae, close_zero_mae
 from utilities.gnina_functions import get_test_info, Timer, process_batch, \
-    print_with_overwrite
+    print_with_overwrite, write_process_info
 
 
-def inference(model, test_types, data_root, savepath, batch_size, labels=None,
+def inference(model, test_types, data_root, save_path, batch_size, labels=None,
               autoencoder=None, dimension=23.0, resolution=0.5, ligmap=None,
               recmap=None, binary_mask=False):
     """Use trained keras model to perform inference on gnina input data.
@@ -42,7 +41,7 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
             <label>  <path_to_receptor_gninatype>  <path_to_ligand_gninatype>
         data_root: Directory to which gninatypes files referenced in test_types
             are relative
-        savepath: Directory to dump outputs, including predictions and
+        save_path: Directory to dump outputs, including predictions and
             serialised embeddings
         batch_size: Number of inputs to perform inference on at once. This
             does not affect predictions, and a large batch size may cause
@@ -60,10 +59,11 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
         recmap: Text file containing definitions of receptor input channels
         binary_mask: Inputs are either in {0, 1} rather than non-negative real
     """
-    savepath = Path(savepath).expanduser().resolve()  # in case this is a string
+    save_path = Path(
+        save_path).expanduser().resolve()  # in case this is a string
     test_types_stem = Path(test_types).stem
     predictions_fname = 'predictions_{}.txt'.format(test_types_stem)
-    predictions_fname = savepath / predictions_fname
+    predictions_fname = save_path / predictions_fname
 
     # Setup molgrid.ExampleProvider and GridMaker to feed into network
 
@@ -94,7 +94,7 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
         labels = molgrid.MGrid1f(batch_size)
 
     # Make output directory
-    savepath.mkdir(parents=True, exist_ok=True)
+    save_path.mkdir(parents=True, exist_ok=True)
 
     print('Performing inference on {} examples'.format(size))
     labels_dict = defaultdict(dict)
@@ -103,9 +103,7 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
         f.write('')
 
     # Logging process ID is useful for memory profiling (see utilities)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
-        f.write('{0} {1}\n'.format(os.getpid(), savepath))
+    write_process_info(__file__, save_path)
 
     iterations = size // batch_size
     with Timer() as t:

@@ -24,7 +24,7 @@ from classifier.inference import inference
 from classifier.model_definitions import define_baseline_model, \
     define_densefs_model
 from utilities.gnina_functions import process_batch, print_with_overwrite, \
-    format_time
+    format_time, write_process_info
 
 
 def main():
@@ -223,9 +223,7 @@ def main():
     print(arg_str)
 
     # Logging process ID is useful for memory profiling (see utilities)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
-        f.write('{0} {1}\n'.format(os.getpid(), args.save_path))
+    write_process_info(__file__, args.save_path)
 
     loss_history_fname = Path(args.save_path, 'loss_log.txt')
     start_time = time.time()

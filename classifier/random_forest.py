@@ -20,7 +20,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 from utilities import gnina_embeddings_pb2
-from utilities.gnina_functions import Timer, format_time
+from utilities.gnina_functions import Timer, format_time, write_process_info
 
 
 def get_embeddings_arr(directory):
@@ -74,9 +74,7 @@ def main(args):
     save_path.mkdir(parents=True, exist_ok=True)
 
     # Logging process ID is useful for memory profiling (see utilities)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
-        f.write('{0} {1}\n'.format(os.getpid(), save_path))
+    write_process_info(__file__, save_path)
 
     if args.model_file is None and args.train_dir is not None:
         print('Extracting serialised embeddings from {}'.format(args.train_dir))
