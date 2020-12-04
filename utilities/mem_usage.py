@@ -8,22 +8,34 @@ from time import sleep
 
 def get_mem_usage(pid):
     output = subprocess.run(
-        ['pmap', pid],
-        capture_output=True, check=True, shell=False).stdout
+        ['pmap', pid], capture_output=True, check=True, shell=False).stdout
     return int(output.decode()[:-1].split('\n')[-1].split()[1][:-1])
+
+
+def get_processes(user=None):
+    """Returns process ids of running python3 processes owned by user."""
+    ps = subprocess.run(
+        ['ps', '-uh'], capture_output=True, check=True, shell=False).stdout
+    ps = ps.decode()[:-1].split('\n')
+    pids = []
+    for process_info in ps:
+        fields = process_info.strip().split()
+        if user is not None and fields[0].replace('+', '') != user:
+            continue
+        if 'mem_usage.py' not in ' '.join(fields[11:]):
+            if fields[10] == 'python3':
+                pids.append(fields[1])
+    return pids
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('pid', type=str, help='Process ID', nargs='*')
+    parser.add_argument('user', type=str, help='Linux username')
     parser.add_argument(
         '--output_fname', '-o', type=str, default='~/Desktop/mem.txt')
     args = parser.parse_args()
 
-    if isinstance(args.pid, str):
-        pids = [args.pid]
-    else:
-        pids = args.pid
+    pids = get_processes(args.user)
     output_fname = Path(args.output_fname).expanduser().resolve()
     with open(output_fname, 'w') as f:
         f.write(' '.join(pids) + '\n')
