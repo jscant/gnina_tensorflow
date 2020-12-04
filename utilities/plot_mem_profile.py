@@ -20,7 +20,7 @@ def extract_working_dir(pid):
     gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
     if not Path(gnina_tf_root, 'process_ids.log').is_file():
         return
-    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+    with open(gnina_tf_root / 'process_ids.log', 'r') as f:
         for line in f.readlines():
             chunks = line.split()
             if len(chunks) == 2 and chunks[0] == pid:
