@@ -21,7 +21,8 @@ def get_processes(user=None):
         p = psutil.Process(pid)
         if p.name() == 'python3' and \
                 'mem_usage.py' not in ' '.join(p.cmdline()) and \
-                p.username() == user and len(p.cmdline()) > 1:
+                p.username() == user and len(p.cmdline()) > 1 and \
+                'gnina_tensorflow' in ' '.join(p.cmdline()):
             pids.append(str(pid))
     return pids
 
