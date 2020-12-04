@@ -47,15 +47,16 @@ if __name__ == '__main__':
         vals = vals[np.where(vals >= 0)][10:-5]
         x, y = condense(vals, gap=5)
         y /= 1e6
-        results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values))
+
         working_dir = extract_working_dir(pid)
         if working_dir is None:
             label = pid
         else:
             label = '/'.join(str(
                 working_dir).split('/')[-4:-1]) + ' (PID={})'.format(pid)
-        plt.plot(x, y, label=label)
-        print('Increases per hour ({1}): {0:.4f} GB'.format(
+
+        results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
+        print('Increase per hour ({1}): {0:.3f} GB'.format(
             3600 * (y[-1] - y[0]) / len(values), pid))
 
     n_fields = len(results)
@@ -74,8 +75,8 @@ if __name__ == '__main__':
             ax = axes[row, col]
         else:
             ax = axes[row]
-        ax.plot(info[0], info[1], label='Process ID: {}'.format(pid))
-        ax.set_title('Increases per hour: {0:.4f} GB'.format(
+        ax.plot(info[0], info[1], label=info[3])
+        ax.set_title('Increase per hour: {0:.3f} GB'.format(
             info[2]))
         ax.ticklabel_format(useOffset=False, style='plain')
         ax.set_xlabel('Time (s)')
