@@ -45,7 +45,7 @@ if __name__ == '__main__':
         processes = get_processes(args.user)
         if not len(processes):
             break
-        list({pid: None for pid in (pids + processes).keys()})
+        list({pid: None for pid in (pids + processes)}.keys())
         titles = ' '.join(pids) + '\n'
         s = ''
         for pid in pids:
