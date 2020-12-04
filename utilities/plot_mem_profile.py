@@ -18,7 +18,7 @@ def extract_working_dir(pid):
     """Retrieve the working directory of a process (pid) if present in logs."""
     pid = str(pid)
     gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    if not gnina_tf_root.is_file():
+    if not Path(gnina_tf_root, 'process_ids.log').is_file():
         return
     with open(gnina_tf_root / 'process_ids.log', 'a') as f:
         for line in f.readlines():
