@@ -65,6 +65,7 @@ class AutoEncoderBase(tf.keras.Model):
                  encoding_size=10,
                  optimiser='sgd',
                  loss='mse',
+                 batch_size=16,
                  hidden_activation='sigmoid',
                  encoding_activation='linear',
                  final_activation='sigmoid',
@@ -99,6 +100,7 @@ class AutoEncoderBase(tf.keras.Model):
         self.adversarial_variance = adversarial_variance
         self.encoding_activation = encoding_activation
         self.conv_filters = conv_filters
+        self.batch_size = batch_size
 
         # Abstract method should be implemented in child class
         self.input_image, self.encoding, self.reconstruction = \
@@ -238,11 +240,6 @@ class AutoEncoderBase(tf.keras.Model):
         config = super().get_config()
         config.update({'learning_rate_schedule': self.learning_rate_schedule,
                        'train_step': self.train_step})
-        if self.adversarial:
-            config.update({
-                'adversarial_train_step': tf.function(
-                    self.adversarial_train_step),
-                'train_step': tf.function(self.adversarial_train_step)})
         try:
             d = self.get_layer('distances')
         except ValueError:
@@ -259,9 +256,9 @@ class AutoEncoderBase(tf.keras.Model):
     def adversarial_train_step(self, data):
         data = data_adapter.expand_1d(data)
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(data)
+        frac = x.get('frac', sample_weight)
         with backprop.GradientTape() as reconstruction_tape:
             reconstructions, latent_representations = self(x, training=True)
-            frac = x.get('frac', sample_weight)
             reconstruction_loss = self.compiled_loss(
                 y, reconstructions, frac,
                 regularization_losses=self.losses)
@@ -270,12 +267,11 @@ class AutoEncoderBase(tf.keras.Model):
             tape=reconstruction_tape)
         self.compiled_metrics.update_state(y, reconstructions, sample_weight)
         generator_metrics = {m.name: m.result() for m in self.metrics}
-        x = x.get('input_image')
+        x = x.get('input_image', x)
         with backprop.GradientTape() as disc_tape:
-            batch_size = x.shape[0]
             prior_sample = tf.random.normal(
-                (batch_size, self.encoding_size), 0.0,
-                np.sqrt(self.adversarial_variance), dtype=tf.float32,
+                shape=(self.batch_size, self.encoding_size), mean=0.0,
+                stddev=np.sqrt(self.adversarial_variance), dtype=tf.float32,
                 name='prior_sample'
             )
             latent_classifications = self.discriminator(

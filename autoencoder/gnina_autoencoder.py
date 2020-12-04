@@ -141,6 +141,7 @@ def main():
             encoding_size=args.encoding_size,
             optimiser=args.optimiser,
             loss=args.loss,
+            batch_size=args.batch_size,
             hidden_activation=args.hidden_activation,
             final_activation=args.final_activation,
             encoding_activation=args.encoding_activation,

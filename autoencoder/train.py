@@ -107,8 +107,8 @@ def train(model, data_root, train_types, iterations, batch_size,
 
     # Are we loading previous loss history or starting afresh?
     if loss_log is None:
-        loss_log = 'iteration loss disc_loss gen_loss nonzero_mae zero_mae ' \
-                   'nonzero_mean learning_rate ' \
+        loss_log = 'iteration time loss disc_loss gen_loss nonzero_mae ' \
+                   'zero_mae nonzero_mean learning_rate ' \
                    'latent_mean latent_variance ks_statistic ks_p_value\n'
     fields = len(loss_log.strip().split())
 
@@ -212,15 +212,16 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         lr = K.get_value(model.optimizer.learning_rate)
 
-        loss_str = ('{0} ' + ' '.join(
-            ['{{{}:.4f}}'.format(i + 1) for i in range(fields - 1)])).format(
-            iteration, metrics['loss'], disc_loss, gen_loss, nonzero_mae,
-            zero_mae, mean_nonzero, lr, z_mean, z_var, ks_statistic, p_value)
-
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
+
+        loss_str = ('{0} {1} ' + ' '.join(
+            ['{{{}:.4f}}'.format(i + 2) for i in range(fields - 2)])).format(
+            iteration, str(time_elapsed).split('.')[0], metrics['loss'],
+            disc_loss, gen_loss, nonzero_mae, zero_mae, mean_nonzero, lr,
+            z_mean, z_var, ks_statistic, p_value)
 
         if not iteration and not silent:
             print('\n')

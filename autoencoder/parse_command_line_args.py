@@ -118,31 +118,24 @@ def pickup(path):
         AutoEncoderBase-derived object initialised with weights from saved
         checkpoint.
     """
-
-    ae = tf.keras.models.load_model(
-        path,
-        custom_objects={
-            'zero_mse': autoencoder_definitions.zero_mse,
-            'nonzero_mse': autoencoder_definitions.nonzero_mse,
-            'composite_mse': autoencoder_definitions.composite_mse,
-            'nonzero_mae': autoencoder_definitions.nonzero_mae,
-            'zero_mae': autoencoder_definitions.zero_mae,
-            'trimmed_nonzero_mae': autoencoder_definitions.trimmed_nonzero_mae,
-            'trimmed_zero_mae': autoencoder_definitions.trimmed_zero_mae,
-            'close_mae': autoencoder_definitions.close_mae,
-            'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
-            'close_zero_mae': autoencoder_definitions.close_zero_mae,
-            'proximity_mse': autoencoder_definitions.proximity_mse,
-            'enc_loss_fn': autoencoder_definitions.enc_loss_fn,
-            'disc_loss_fn': autoencoder_definitions.disc_loss_fn,
-            'SquaredError': autoencoder_definitions.SquaredError,
-            'define_discriminator': autoencoder_definitions.define_discriminator,
-            'adversarial_train_step': tf.function(
-                autoencoder_definitions.AutoEncoderBase.adversarial_train_step),
-            'train_step': tf.function(
-                autoencoder_definitions.AutoEncoderBase.adversarial_train_step)
-        }
-    )
+    custom_objects = {
+        'zero_mse': autoencoder_definitions.zero_mse,
+        'nonzero_mse': autoencoder_definitions.nonzero_mse,
+        'composite_mse': autoencoder_definitions.composite_mse,
+        'nonzero_mae': autoencoder_definitions.nonzero_mae,
+        'zero_mae': autoencoder_definitions.zero_mae,
+        'trimmed_nonzero_mae': autoencoder_definitions.trimmed_nonzero_mae,
+        'trimmed_zero_mae': autoencoder_definitions.trimmed_zero_mae,
+        'close_mae': autoencoder_definitions.close_mae,
+        'close_nonzero_mae': autoencoder_definitions.close_nonzero_mae,
+        'close_zero_mae': autoencoder_definitions.close_zero_mae,
+        'proximity_mse': autoencoder_definitions.proximity_mse,
+        'enc_loss_fn': autoencoder_definitions.enc_loss_fn,
+        'disc_loss_fn': autoencoder_definitions.disc_loss_fn,
+        'SquaredError': autoencoder_definitions.SquaredError,
+        'define_discriminator': autoencoder_definitions.define_discriminator
+    }
+    ae = tf.keras.models.load_model(path, custom_objects=custom_objects)
     return ae
 
 
