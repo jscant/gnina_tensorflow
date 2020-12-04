@@ -119,6 +119,13 @@ def train(model, data_root, train_types, iterations, batch_size,
     previous_checkpoint = None
     start_time = time.time()
     prefix = None
+
+    # Freeze graph to stop memory leaks, loaded models are already frozen.
+    try:
+        tf.compat.v1.get_default_graph().finalize()
+    except RuntimeError:
+        pass
+
     for iteration in range(starting_iter, iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
                 and iteration < iterations - 1:
