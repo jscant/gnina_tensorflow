@@ -37,7 +37,10 @@ if __name__ == '__main__':
     usages = ''
     pids = []
     while True:
-        pids = sorted(list(set(get_processes(args.user) + pids)))
+        processes = get_processes(args.user)
+        if not len(processes):
+            break
+        pids = sorted(list(set(processes + pids)))
         titles = ' '.join(pids) + '\n'
         s = ''
         for pid in pids:
