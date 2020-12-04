@@ -14,6 +14,7 @@ gnina fork (https://github.com/gnina/gnina).
 """
 
 import argparse
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -59,7 +60,7 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
         recmap: Text file containing definitions of receptor input channels
         binary_mask: Inputs are either in {0, 1} rather than non-negative real
     """
-    savepath = Path(savepath).resolve()  # in case this is a string
+    savepath = Path(savepath).expanduser().resolve()  # in case this is a string
     test_types_stem = Path(test_types).stem
     predictions_fname = 'predictions_{}.txt'.format(test_types_stem)
     predictions_fname = savepath / predictions_fname
@@ -100,6 +101,11 @@ def inference(model, test_types, data_root, savepath, batch_size, labels=None,
     test_output_string = ''
     with open(predictions_fname, 'w') as f:
         f.write('')
+
+    # Logging process ID is useful for memory profiling (see utilities)
+    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1}\n'.format(os.getpid(), savepath))
 
     iterations = size // batch_size
     with Timer() as t:

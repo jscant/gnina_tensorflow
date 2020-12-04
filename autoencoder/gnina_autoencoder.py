@@ -162,6 +162,11 @@ def main():
         tf.keras.utils.plot_model(
             ae, save_path / 'model.png', show_shapes=True)
 
+    # Logging process ID is useful for memory profiling (see utilities)
+    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1}\n'.format(os.getpid(), save_path))
+
     losses, nonzero_losses, zero_losses = train(
         ae,
         data_root=args.data_root,

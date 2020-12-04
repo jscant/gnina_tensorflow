@@ -143,9 +143,9 @@ def main():
         folder = args.name
 
     if args.load_model is None:
-        args.save_path = Path(args.save_path, folder).resolve()
+        args.save_path = Path(args.save_path, folder).expanduser().resolve()
     else:
-        args.save_path = Path(args.save_path).resolve()
+        args.save_path = Path(args.save_path).expanduser().resolve()
 
     # Use cpu rather than gpu if specified
     molgrid.set_gpu_enabled(1 - args.use_cpu)
@@ -222,8 +222,14 @@ def main():
         f.write(arg_str)
     print(arg_str)
 
+    # Logging process ID is useful for memory profiling (see utilities)
+    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1}\n'.format(os.getpid(), args.save_path))
+
     loss_history_fname = Path(args.save_path, 'loss_log.txt')
     start_time = time.time()
+
     for iteration in range(starting_iter, args.iterations):
         if (not (iteration + 1) % args.save_interval and
                 iteration < args.iterations - 1):

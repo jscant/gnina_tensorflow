@@ -6,7 +6,7 @@ Created on Mon Aug 10 11:11:57 2020
 @author: scantleb
 @brief: Use trained autoencoder to calculate encodings for gnina inputs.
 """
-
+import os
 import time
 from pathlib import Path
 
@@ -108,10 +108,15 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
         with open(Path(save_path) / 'encodings' / fname, 'wb') as f:
             f.write(rec_msg.SerializeToString())
 
-    types_file = Path(types_file).expanduser()
-    save_path = Path(save_path).expanduser()
+    types_file = Path(types_file).expanduser().resolve()
+    save_path = Path(save_path).expanduser().resolve()
     encodings_dir = Path(save_path) / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
+
+    # Logging process ID is useful for memory profiling (see utilities)
+    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1}\n'.format(os.getpid(), save_path))
 
     delete_types_file, types_file, paths = get_paths(types_file)
 

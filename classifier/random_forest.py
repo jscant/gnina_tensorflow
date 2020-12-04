@@ -11,6 +11,7 @@ for the expressiveness of the penultimate layer of a trained gnina model.
 """
 
 import argparse
+import os
 from collections import deque
 from pathlib import Path
 
@@ -69,8 +70,14 @@ def main(args):
         raise RuntimeError(
             'Please specify either train_dir, test_dir, or both')
 
-    save_path = Path(args.save_path).resolve()
+    save_path = Path(args.save_path).expanduser().resolve()
     save_path.mkdir(parents=True, exist_ok=True)
+
+    # Logging process ID is useful for memory profiling (see utilities)
+    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
+    with open(gnina_tf_root / 'process_ids.log', 'a') as f:
+        f.write('{0} {1}\n'.format(os.getpid(), save_path))
+
     if args.model_file is None and args.train_dir is not None:
         print('Extracting serialised embeddings from {}'.format(args.train_dir))
         with Timer() as t:
