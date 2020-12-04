@@ -1,9 +1,10 @@
-import pandas as pd
-import numpy as np
-from matplotlib import pyplot as plt 
 import argparse
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
 from jack.utilities import condense, upload_to_imgur
+from matplotlib import pyplot as plt
 
 parser = argparse.ArgumentParser()
 parser.add_argument('fname', type=str, default='~/Desktop/mem.txt')
@@ -21,13 +22,13 @@ df.fillna(-1, inplace=True)
 results = {}
 for pid, values in df.iteritems():
     vals = values.to_numpy()
-    vals = vals[np.where(vals >= 0)][10:]
+    vals = vals[np.where(vals >= 0)][10:-5]
     x, y = condense(vals, gap=5)
     y /= 1e6
-    results[pid] = (x, y, 3600*(y[-1] - y[0]) / len(values))
+    results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values))
     plt.plot(x, y, label=pid)
     print('Increases per hour ({1}): {0:.4f} GB'.format(
-        3600*(y[-1] - y[0]) / len(values), pid))
+        3600 * (y[-1] - y[0]) / len(values), pid))
 
 n_fields = len(results)
 if n_fields == 1:
