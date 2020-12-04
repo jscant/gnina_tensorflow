@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from time import sleep
 
+import psutil
+
 
 def get_mem_usage(pid):
     output = subprocess.run(
@@ -14,17 +16,13 @@ def get_mem_usage(pid):
 
 def get_processes(user=None):
     """Returns process ids of running python3 processes owned by user."""
-    ps = subprocess.run(
-        ['ps', '-uh'], capture_output=True, check=True, shell=False).stdout
-    ps = ps.decode()[:-1].split('\n')
     pids = []
-    for process_info in ps:
-        fields = process_info.strip().split()
-        if user is not None and fields[0].replace('+', '') != user:
-            continue
-        if 'mem_usage.py' not in ' '.join(fields[11:]):
-            if fields[10] == 'python3':
-                pids.append(fields[1])
+    for pid in psutil.pids():
+        p = psutil.Process(pid)
+        if p.name() == 'python3' and \
+                'mem_usage.py' not in ' '.join(p.cmdline()) and \
+                p.username() == user:
+            pids.append(str(pid))
     return pids
 
 
