@@ -22,7 +22,7 @@ def get_processes(user=None):
             p = psutil.Process(pid)
             cmd_str = ' '.join(p.cmdline())
             if p.name() == 'python3' and 'mem_usage.py' not in cmd_str and \
-                    'plot_mem_usage.py' not in cmd_str and \
+                    'plot_mem_profile.py' not in cmd_str and \
                     'memory.py' not in cmd_str and \
                     p.username() == user and len(p.cmdline()) > 1:
                 pids.append(str(pid))
