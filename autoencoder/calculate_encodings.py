@@ -293,6 +293,6 @@ if __name__ == '__main__':
             save_path=save_path, dimension=args.dimension,
             resolution=args.resolution, rotate=False, ligmap=args.ligmap,
             recmap=args.recmap, binary_mask=args.binary_mask,
-            collect_statistics=True)
+            collect_statistics=args.statistics)
     print('Encodings calculated and saved in {} s'.format(t.interval))
     print('Encodings written to {}'.format(save_path))
