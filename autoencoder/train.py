@@ -178,6 +178,8 @@ def train(model, data_root, train_types, iterations, batch_size,
         metrics = model.train_on_batch(
             x_inputs, {'reconstruction': input_tensor_numpy}, return_dict=True)
 
+        del x_inputs, input_tensor_numpy
+
         # Temporary fix for strange renaming of metric outputs when resuming
         # model training from a save
         if iteration == starting_iter:
