@@ -50,7 +50,10 @@ if __name__ == '__main__':
         x, y = condense(vals, gap=5)
         y /= 1e6
 
-        working_dir, slurm_job_id = extract_working_dir_and_slurm_id(pid)
+        try:
+            working_dir, slurm_job_id = extract_working_dir_and_slurm_id(pid)
+        except TypeError:
+            continue
         if working_dir is None:
             label = pid
         else:
