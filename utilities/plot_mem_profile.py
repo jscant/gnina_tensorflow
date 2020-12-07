@@ -55,7 +55,7 @@ if __name__ == '__main__':
             label = pid
         else:
             label = '/'.join(str(
-                working_dir).split('/')[-4:-1]) + ' (Slurm job ID={})'.format(
+                working_dir).split('/')[-4:]) + ' (Slurm job ID={})'.format(
                 slurm_job_id)
 
         results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
