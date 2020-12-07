@@ -11,7 +11,6 @@ for the expressiveness of the penultimate layer of a trained gnina model.
 """
 
 import argparse
-import os
 from collections import deque
 from pathlib import Path
 

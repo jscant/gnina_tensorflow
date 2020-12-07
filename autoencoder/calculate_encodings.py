@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import molgrid
+import numpy as np
 import tensorflow as tf
 
 from autoencoder.parse_command_line_args import parse_command_line_args
@@ -20,7 +21,8 @@ from utilities.reorder_types_file import reorder
 
 def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                         dimension, resolution, rotate=False, ligmap=None,
-                        recmap=None, binary_mask=False):
+                        recmap=None, binary_mask=False,
+                        collect_statistics=False):
     """Calculates encodings for gnina inputs.
 
     Uses trained AutoEncoder object to calculate the encodings of all gnina
@@ -113,6 +115,10 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     encodings_dir = Path(save_path) / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
 
+    recon_statistics_path = Path(save_path) / 'reconstruction_statistics.txt'
+    if recon_statistics_path.is_file():
+        recon_statistics_path.unlink()
+
     # Logging process ID is useful for memory profiling (see utilities)
     write_process_info(__file__, save_path)
 
@@ -159,6 +165,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     current_rec = paths[0][1]
     encodings = []
     start_time = time.time()
+    recon_statistics = 'structure original_mean original_var reconstruction_mean reconstruction_var '
 
     try:
         encoder.get_layer('frac')
@@ -179,7 +186,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
         inputs = [input_tensor.tonumpy()]
         if composite:  # We don't use this but is needed for a valid model
             inputs.append(tf.constant(1., shape=(batch_size,)))
-        _, encodings_numpy = encoder.predict_on_batch(inputs)
+        reconstructions, encodings_numpy = encoder.predict_on_batch(inputs)
 
         for batch_idx in range(batch_size):
             global_idx = iteration * batch_size + batch_idx
@@ -189,6 +196,49 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                 encodings = []
                 current_rec = rec
             encodings.append((label, lig, encodings_numpy[batch_idx, :]))
+            if collect_statistics:
+                channels = inputs[0].shape[1]
+                if batch_idx == 0 and iteration == 0:
+                    recon_statistics += ' '.join(
+                        ['channel_{0}_original_mean channel_{0}_original_var '
+                         'channel_{0}_reconstruction_mean '
+                         'channel_{0}_reconstruction_var'.format(c) for c in
+                         range(channels)]
+                    ) + '\n'
+
+                recon_statistics += '{} '.format(
+                    batch_size * iteration + batch_idx)
+                input_struct = inputs[0][batch_idx, :, :, :, :]
+                reconstruction = reconstructions[batch_idx, :, :, :, :]
+                nz_input_struct = input_struct[np.where(input_struct > 0)]
+                nz_reconstruction = reconstruction[np.where(input_struct > 0)]
+                nz_input_var = np.var(nz_input_struct)
+                nz_recon_var = np.var(nz_reconstruction)
+                nz_input_mean = np.mean(nz_input_struct)
+                nz_recon_mean = np.mean(nz_reconstruction)
+                recon_statistics += '{0:0.4f} {1:0.4f} {2:0.4f} {3:0.4f} '.format(
+                    nz_input_mean, nz_input_var, nz_recon_mean, nz_recon_var
+                )
+                for channel in range(channels):
+                    input_channel = input_struct[channel, :, :, :]
+                    recon_channel = reconstruction[channel, :, :, :]
+                    nz_input_channel = input_channel[
+                        np.where(input_channel > 0)]
+                    nz_recon_channel = recon_channel[
+                        np.where(input_channel > 0)]
+                    nz_input_channel_var = np.var(nz_input_channel)
+                    nz_recon_channel_var = np.var(nz_recon_channel)
+                    nz_input_channel_mean = np.mean(nz_input_channel)
+                    nz_recon_channel_mean = np.mean(nz_recon_channel)
+                    recon_statistics += '{0:0.4f} {1:0.4f} {2:0.4f} {3:0.4f} '.format(
+                        nz_input_channel_mean, nz_input_channel_var,
+                        nz_recon_channel_mean, nz_recon_channel_var
+                    )
+                recon_statistics = recon_statistics[:-1] + '\n'
+                if not iteration % 100:
+                    with open(recon_statistics_path, 'a') as f:
+                        f.write(recon_statistics)
+                    recon_statistics = ''
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1)
@@ -242,6 +292,7 @@ if __name__ == '__main__':
             batch_size=args.batch_size, types_file=args.test,
             save_path=save_path, dimension=args.dimension,
             resolution=args.resolution, rotate=False, ligmap=args.ligmap,
-            recmap=args.recmap, binary_mask=args.binary_mask)
+            recmap=args.recmap, binary_mask=args.binary_mask,
+            collect_statistics=True)
     print('Encodings calculated and saved in {} s'.format(t.interval))
     print('Encodings written to {}'.format(save_path))

@@ -110,7 +110,9 @@ def train(model, data_root, train_types, iterations, batch_size,
         loss_log = 'iteration time loss disc_loss gen_loss nonzero_mae ' \
                    'zero_mae nonzero_mean learning_rate ' \
                    'latent_mean latent_variance ks_statistic ks_p_value\n'
-    fields = len(loss_log.strip().split())
+        fields = len(loss_log.strip().split())
+    else:
+        fields = len(loss_log.split('\n')[0].strip().split())
 
     if not silent and save_path is not None:
         save_path = Path(save_path)
@@ -228,8 +230,12 @@ def train(model, data_root, train_types, iterations, batch_size,
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
+        print(fields)
+
         loss_str = ('{0} {1} ' + ' '.join(
-            ['{{{}:.4f}}'.format(i + 2) for i in range(fields - 2)])).format(
+            ['{{{}:.4f}}'.format(i + 2) for i in range(fields - 2)]))
+
+        loss_str = loss_str.format(
             iteration, str(time_elapsed).split('.')[0], metrics['loss'],
             disc_loss, gen_loss, nonzero_mae, zero_mae, mean_nonzero, lr,
             z_mean, z_var, ks_statistic, p_value)
@@ -241,12 +247,12 @@ def train(model, data_root, train_types, iterations, batch_size,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f}\n').format(
+                              '| Zero MAE: {5:0.4f}').format(
                 iteration, iterations, loss_fn, metrics['loss'],
                 nonzero_mae, zero_mae, format_time(time_elapsed), formatted_eta)
 
             if real_prob >= 0:
-                console_output += ('Probabilities (real | fake): '
+                console_output += ('\nProbabilities (real | fake): '
                                    '({0:.4f} | {1:.4f})\n'
                                    'z-Mean: {2} | z-Var: {3:.4f}\n'
                                    'Disc loss: {4:.4f} | Gen loss: {6:.4f}\n'
@@ -255,7 +261,7 @@ def train(model, data_root, train_types, iterations, batch_size,
                     real_prob, fake_prob, '{0:.4f}'.format(z_mean)[:6], z_var,
                     disc_loss, lr, gen_loss, ks_statistic, p_value)
             else:
-                console_output += 'Learning rate: {0:.3e}'.format(lr)
+                console_output += '\nLearning rate: {0:.3e}\n'.format(lr)
             if iteration == starting_iter:
                 print()
             print_with_overwrite(console_output)
