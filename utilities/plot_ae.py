@@ -75,7 +75,7 @@ def extract_data(loss_logs, fields, max_x=-1):
     data = defaultdict(dict)
     extra_info = defaultdict(dict)
     for loss_log in loss_logs:
-        exp = '/'.join(str(loss_log).split('/')[-5:-1])
+        exp = '/'.join(str(loss_log).split('/')[-5:])
         config = loss_log.parent / 'config'
         with open(config, 'r') as f:
             for line in f.readlines():
