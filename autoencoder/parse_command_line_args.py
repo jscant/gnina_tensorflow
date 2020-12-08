@@ -262,7 +262,7 @@ def parse_command_line_args(test_or_train='train'):
                  'specified in the command line will override the options '
                  'loaded from the config file.')
         parser.add_argument("--test", '-t', type=str, required=False)
-        parser.add_argument('--statistics', '-s', action='store_true',
+        parser.add_argument('--statistics', action='store_true',
                             help='Generate and save statistics on '
                                  'reconstructions')
 
