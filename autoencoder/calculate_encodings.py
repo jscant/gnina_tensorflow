@@ -115,9 +115,12 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     encodings_dir = Path(save_path) / 'encodings'
     encodings_dir.mkdir(exist_ok=True, parents=True)
 
-    recon_statistics_path = Path(save_path) / 'reconstruction_statistics.txt'
+    recon_statistics_path = Path(save_path, 'reconstruction_statistics.txt')
     if recon_statistics_path.is_file():
         recon_statistics_path.unlink()
+
+    pd_friendly_recon_statistics_path = Path(
+        save_path, 'pd_friendly_stats.txt')
 
     # Logging process ID is useful for memory profiling (see utilities)
     write_process_info(__file__, save_path)
@@ -129,7 +132,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
         'data_root': str(Path(data_root).expanduser()), 'balanced': False,
         'shuffle': False, 'cache_structs': False
     }
-    if ligmap is None or recmap is None:
+    if ligmap is None or recmap is None or ligmap == 'None' or recmap == 'None':
         # noinspection PyArgumentList
         e_test = molgrid.ExampleProvider(**example_provider_kwargs)
     else:
@@ -166,6 +169,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     encodings = []
     start_time = time.time()
     recon_statistics = 'structure original_mean original_var reconstruction_mean reconstruction_var '
+    panda_friendly_output = 'structure channel p statistic value\n'
 
     try:
         encoder.get_layer('frac')
@@ -219,6 +223,19 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                 recon_statistics += '{0:0.4f} {1:0.4f} {2:0.4f} {3:0.4f} '.format(
                     nz_input_mean, nz_input_var, nz_recon_mean, nz_recon_var
                 )
+
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'original', 'mean', nz_input_mean
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'original', 'var', nz_input_var
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'reconstruction', 'mean', nz_recon_mean
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'reconstruction', 'var', nz_recon_var
+                )
                 for channel in range(channels):
                     input_channel = input_struct[channel, :, :, :]
                     recon_channel = reconstruction[channel, :, :, :]
@@ -234,11 +251,30 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                         nz_input_channel_mean, nz_input_channel_var,
                         nz_recon_channel_mean, nz_recon_channel_var
                     )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'original', 'mean',
+                        nz_input_channel_mean
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'original', 'var',
+                        nz_input_channel_var
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'reconstruction', 'mean',
+                        nz_recon_channel_mean
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'reconstruction', 'var',
+                        nz_recon_channel_var
+                    )
                 recon_statistics = recon_statistics[:-1] + '\n'
                 if not iteration % 100:
                     with open(recon_statistics_path, 'a') as f:
                         f.write(recon_statistics)
                     recon_statistics = ''
+                    with open(pd_friendly_recon_statistics_path, 'a') as f:
+                        f.write(panda_friendly_output)
+                    panda_friendly_output = ''
 
         time_elapsed = time.time() - start_time
         time_per_iter = time_elapsed / (iteration + 1)
