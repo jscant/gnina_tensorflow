@@ -61,9 +61,12 @@ if __name__ == '__main__':
                 working_dir).split('/')[-4:]) + ' (Slurm job ID={})'.format(
                 slurm_job_id)
 
-        results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
-        print('Increase per hour ({1}): {0:.3f} GB'.format(
-            3600 * (y[-1] - y[0]) / len(values), slurm_job_id))
+        try:
+            results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
+            print('Increase per hour ({1}): {0:.3f} GB'.format(
+                3600 * (y[-1] - y[0]) / len(values), slurm_job_id))
+        except IndexError:
+            pass
 
     n_fields = len(results)
     if n_fields == 1:
