@@ -4,13 +4,13 @@ Created on Sat Jun 20 14:38:14 2020
 @author: scantleb
 @brief: Function to train autoencoders defined in autoencoder_definitions.
 """
-
 import time
 from math import isnan
 from pathlib import Path
 
 import molgrid
 import numpy as np
+import psutil
 import tensorflow as tf
 from gnina_tensorflow_cpp import calculate_distances as cd
 from scipy import stats
@@ -18,6 +18,24 @@ from tensorflow.keras import backend as K
 
 from utilities.gnina_functions import format_time, wipe_directory, \
     print_with_overwrite
+
+
+def format_number(i, precision=2):
+    """Returns a comma- and precision- formatted string given a float."""
+    i = str(i)
+    if i.find('.') == -1:
+        integer = i
+        decimal = '0'
+    else:
+        integer, decimal = tuple(i.split('.'))
+    split_integer = ''
+    for idx in range(len(integer) - 1, -1, -1):
+        split_integer = integer[idx] + split_integer
+        if not (len(integer) - idx) % 3 and idx:
+            split_integer = ',' + split_integer
+    decimal = float('0.' + decimal)
+    decimal = '{{:.{}f}}'.format(precision).format(decimal)[1:]
+    return split_integer + decimal
 
 
 def train(model, data_root, train_types, iterations, batch_size,
@@ -122,11 +140,16 @@ def train(model, data_root, train_types, iterations, batch_size,
     start_time = time.time()
     prefix = None
 
+    mem_attributes = ('rss', 'shared', 'vms', 'data', 'text')
+
     # Freeze graph to stop memory leaks, loaded models are already frozen.
     try:
         tf.compat.v1.get_default_graph().finalize()
     except RuntimeError:
         pass
+
+    process = psutil.Process()
+    mem_str = 'Time Memory_type Usage\n'
 
     for iteration in range(starting_iter, iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
@@ -205,8 +228,8 @@ def train(model, data_root, train_types, iterations, batch_size,
         else:
             ks_statistic, p_value = -0.1, -0.1
 
-        disc_loss = metrics.get('disc_loss', -1)
-        gen_loss = metrics.get('gen_loss', -1)
+        disc_loss = metrics.get('disc_loss', -0.03)
+        gen_loss = metrics.get('gen_loss', -0.03)
         z_mean = metrics.get('mean', -1)
         z_var = metrics.get('variance', -1)
 
@@ -226,11 +249,17 @@ def train(model, data_root, train_types, iterations, batch_size,
         lr = K.get_value(model.optimizer.learning_rate)
 
         time_elapsed = time.time() - start_time
+
+        mem_info = process.memory_info()
+        memory_used = mem_info.vms / (1024 ** 2)
+        for attribute in mem_attributes:
+            mem_str += '{0:.3f} {1} {2}\n'.format(
+                time_elapsed, attribute, getattr(mem_info, attribute)
+            )
+
         time_per_iter = time_elapsed / (iteration + 1 - starting_iter)
         time_remaining = time_per_iter * (iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
-
-        print(fields)
 
         loss_str = ('{0} {1} ' + ' '.join(
             ['{{{}:.4f}}'.format(i + 2) for i in range(fields - 2)]))
@@ -247,12 +276,12 @@ def train(model, data_root, train_types, iterations, batch_size,
             console_output = ('Iteration: {0}/{1} | Time elapsed {6} | '
                               'Time remaining: {7}'
                               '\nLoss ({2}): {3:0.4f} | Non-zero MAE: {4:0.4f} '
-                              '| Zero MAE: {5:0.4f}').format(
+                              '| Zero MAE: {5:0.4f}\n').format(
                 iteration, iterations, loss_fn, metrics['loss'],
                 nonzero_mae, zero_mae, format_time(time_elapsed), formatted_eta)
 
             if real_prob >= 0:
-                console_output += ('\nProbabilities (real | fake): '
+                console_output += ('Probabilities (real | fake): '
                                    '({0:.4f} | {1:.4f})\n'
                                    'z-Mean: {2} | z-Var: {3:.4f}\n'
                                    'Disc loss: {4:.4f} | Gen loss: {6:.4f}\n'
@@ -261,16 +290,21 @@ def train(model, data_root, train_types, iterations, batch_size,
                     real_prob, fake_prob, '{0:.4f}'.format(z_mean)[:6], z_var,
                     disc_loss, lr, gen_loss, ks_statistic, p_value)
             else:
-                console_output += '\nLearning rate: {0:.3e}\n'.format(lr)
+                console_output += 'Learning rate: {0:.3e}\n'.format(lr)
+
+            console_output += 'Memory usage: {} MB'.format(
+                format_number(memory_used))
             if iteration == starting_iter:
                 print()
             print_with_overwrite(console_output)
 
         if save_path is not None:
             loss_log += loss_str + '\n'
-            if not iteration % 10:
+            if not iteration % 10 or iteration == iterations - 1:
                 with open(save_path / 'loss_log.txt', 'w') as f:
                     f.write(loss_log[:-1])
+                with open(save_path / 'memory_history.txt', 'w') as f:
+                    f.write(mem_str)
 
         zero_losses.append(zero_mae)
         nonzero_losses.append(nonzero_mae)

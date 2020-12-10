@@ -1,98 +1,76 @@
-"""Plot the results of mem_usage.py"""
+"""Plot the memory usage of one or more autoencoder jobs."""
 
 import argparse
+import os
+import socket
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
+import seaborn as sns
+from matplotlib import pyplot as plt
 
 try:
     from jack.utilities import upload_to_imgur
 except ImportError:
     upload_to_imgur = None
-from matplotlib import pyplot as plt
-from utilities.gnina_functions import condense
 
 
-def extract_working_dir_and_slurm_id(pid):
-    """Retrieve the working directory of a process (pid) if present in logs."""
-    pid = str(pid)
-    gnina_tf_root = Path(__file__).expanduser().resolve().parents[1]
-    if not Path(gnina_tf_root, 'process_ids.log').is_file():
-        return
-    with open(gnina_tf_root / 'process_ids.log', 'r') as f:
-        for line in f.readlines():
-            chunks = line.split()
-            if len(chunks) == 2 and chunks[0] == pid:
-                return Path(chunks[1]), None
-            if len(chunks) == 3 and chunks[0] == pid:
-                return Path(chunks[1]), chunks[2]
+def obtain_dataframe(raw_fnames, omit_fields=()):
+    """Generate and sanitise dataframe given autoencoder working directories."""
+    res = pd.DataFrame()
+    for raw_fname in raw_fnames:
+        fname = Path(raw_fname).expanduser()
+        for log in fname.rglob('**/memory_history.txt'):
+            df = pd.read_csv(log, sep=' ')
+            df['Job'] = '/'.join(str(fname).split('/')[-4:])
+            res = pd.concat([res, df], copy=False)
+    res['Usage'] /= 1024 ** 3
+    for field in omit_fields:
+        res = res[res['Memory_type'] != field]
+    res.rename(columns={'Usage': 'Usage (GB)', 'Memory_type': 'Memory type',
+                        'Time': 'Time (s)'}, inplace=True)
+    return res
+
+
+def plot(df):
+    """Plot a facetgrid of relplots with memory usage contained in dataframe."""
+    g = sns.relplot(
+        data=df,
+        x='Time (s)', y='Usage (GB)',
+        hue='Memory type', row='Job',
+        kind="line", legend='brief',
+        height=5, aspect=1, facet_kws=dict(
+            sharex=True, sharey=False, legend_out=True)
+    )
+    g.legend._visible = False
+    plt.legend()
+    for ax in g.axes.ravel():
+        ax.set_ylim([-0.02, 1.1 * ax.get_ylim()[1]])
+        ax.set_xlim(left=0)
+        title = ax.get_title().replace('Job = ', '')
+        title += '\n({0}@{1})'.format(os.getenv('USER'), socket.gethostname())
+        ax.set_title(title)
+    return g
+
+
+def main(args):
+    filenames = [args.filename] if isinstance(args.filename, str) else \
+        args.filename
+    omit_fields = [] if args.omit_fields is None else args.omit_fields
+    df = obtain_dataframe(filenames, omit_fields=omit_fields)
+
+    sns.set_style('whitegrid')
+    g = plot(df)
+    g.savefig('mem.png')
+
+    if args.upload and upload_to_imgur is not None:
+        print(upload_to_imgur('mem.png'))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('fname', type=str, default='~/Desktop/mem.txt')
+    parser.add_argument('filename', nargs='*', type=str)
     parser.add_argument('--upload', '-u', action='store_true')
+    parser.add_argument('--omit_fields', '-o', nargs='*', type=str)
     args = parser.parse_args()
-
-    fname = Path(args.fname).expanduser().resolve()
-
-    plt.figure(figsize=(15, 7))
-    plt.ticklabel_format(useOffset=False, style='plain')
-
-    df = pd.read_csv(fname, sep=' ')
-    df.fillna(-1, inplace=True)
-
-    results = {}
-    for pid, values in df.iteritems():
-        vals = values.to_numpy()
-        vals = vals[np.where(vals >= 0)][10:-5]
-        x, y = condense(vals, gap=5)
-        y /= 1e6
-
-        try:
-            working_dir, slurm_job_id = extract_working_dir_and_slurm_id(pid)
-        except TypeError:
-            continue
-        if working_dir is None:
-            label = pid
-        else:
-            label = '/'.join(str(
-                working_dir).split('/')[-4:]) + ' (Slurm job ID={})'.format(
-                slurm_job_id)
-
-        try:
-            results[pid] = (x, y, 3600 * (y[-1] - y[0]) / len(values), label)
-            print('Increase per hour ({1}): {0:.3f} GB'.format(
-                3600 * (y[-1] - y[0]) / len(values), slurm_job_id))
-        except IndexError:
-            pass
-
-    n_fields = len(results)
-    if n_fields == 1:
-        fig, ax = plt.subplots(1, 1, figsize=(8, 5))
-        axes = tuple([ax])
-    else:
-        cols = (n_fields + 1) // 2
-        width = cols * 10
-        fig, axes = plt.subplots(2, cols, figsize=(width, 10))
-
-    for idx, (pid, info) in enumerate(results.items()):
-        col = idx // 2
-        row = idx % 2
-        if n_fields > 2:
-            ax = axes[row, col]
-        else:
-            ax = axes[row]
-        ax.plot(info[0], info[1], label=info[3])
-        ax.set_title('Increase per hour: {0:.3f} GB'.format(
-            info[2]))
-        ax.ticklabel_format(useOffset=False, style='plain')
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Memory usage (GB)')
-        ax.legend()
-        ax.grid()
-    plt.savefig('mem.png')
-
-    if args.upload and upload_to_imgur is not None:
-        print(upload_to_imgur('mem.png'))
+    main(args)
