@@ -5,6 +5,7 @@ import os
 import socket
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
@@ -48,7 +49,21 @@ def plot(df):
         ax.set_ylim([-0.02, 1.1 * ax.get_ylim()[1]])
         ax.set_xlim(left=0)
         title = ax.get_title().replace('Job = ', '')
+        highest_y = -np.inf
+        dy = 0
+        dt = -1
+        for line in ax.get_lines():
+            x, y = line._x, line._y
+            if len(y) < 2:
+                continue
+            max_y, min_y = np.amax(y), np.amin(y)
+            if max_y > highest_y:
+                highest_y = max_y
+                dy = max_y - min_y
+                dt = np.amax(x) - np.amin(x)
+        dydt = 3600 * (dy / dt)
         title += '\n({0}@{1})'.format(os.getenv('USER'), socket.gethostname())
+        title += '\nChange per hour: {:.3f} GB'.format(dydt)
         ax.set_title(title)
     return g
 
