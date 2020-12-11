@@ -150,6 +150,7 @@ def train(model, data_root, train_types, iterations, batch_size,
 
     process = psutil.Process()
     mem_str = 'Time Memory_type Usage\n'
+    x_inputs = {}
 
     for iteration in range(starting_iter, iterations):
         if save_path is not None and not (iteration + 1) % save_interval \
@@ -182,11 +183,10 @@ def train(model, data_root, train_types, iterations, batch_size,
 
         if denoising > 0:
             p_grid = np.random.rand(*input_tensor_numpy.shape)
-            noisy_input = input_tensor.tonumpy()
-            noisy_input[np.where(p_grid < denoising)] = 0
-            x_inputs = {'input_image': noisy_input}
+            x_inputs['input_image'] = input_tensor.tonumpy()
+            x_inputs['input_image'][np.where(p_grid < denoising)] = 0
         else:
-            x_inputs = {'input_image': input_tensor_numpy}
+            x_inputs['input_image'] = input_tensor.tonumpy()
 
         if loss_fn == 'composite_mse':
             x_inputs['frac'] = tf.constant(
@@ -201,9 +201,8 @@ def train(model, data_root, train_types, iterations, batch_size,
             input_tensor_numpy[np.where(input_tensor_numpy > 0)])
 
         metrics = model.train_on_batch(
-            x_inputs, {'reconstruction': input_tensor_numpy}, return_dict=True)
-
-        del x_inputs, input_tensor_numpy
+            x_inputs, {'reconstruction': x_inputs['input_image']},
+            return_dict=True)
 
         # Temporary fix for strange renaming of metric outputs when resuming
         # model training from a save
@@ -309,6 +308,8 @@ def train(model, data_root, train_types, iterations, batch_size,
         zero_losses.append(zero_mae)
         nonzero_losses.append(nonzero_mae)
         losses.append(metrics['loss'])
+
+        # gc.collect()
 
     if save_path is not None:
         # Save final trained autoencoder
