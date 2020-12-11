@@ -46,7 +46,7 @@ def plot(df):
         x='Time (s)', y='Usage (GB)',
         hue='Memory type', col='Job',
         kind="line", legend='brief',
-        col_wrap=5,
+        col_wrap=4,
         height=5, aspect=1, facet_kws=dict(
             sharex=False, sharey=True, legend_out=True)
     )
@@ -55,6 +55,7 @@ def plot(df):
         ax.set_ylim([-0.02, 1.1 * ax.get_ylim()[1]])
         ax.set_xlim(left=0)
         title = ax.get_title().replace('Job = ', '')
+        title = '/'.join(title.split('/')[-4:])
         highest_y = -np.inf
         dy = 0
         dt = -1
