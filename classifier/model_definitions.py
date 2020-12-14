@@ -61,11 +61,6 @@ def define_baseline_model(dims):
     model.compile(optimizer=keras.optimizers.SGD(
         lr=0.01, momentum=0.9), loss=["sparse_categorical_crossentropy",
                                       None])
-    # Bug with add_loss puts empty dict at the end of model._layers which
-    # interferes with some functionality (such as
-    # tf.keras.utils.plot_model)
-    model._layers = [layer for layer in model._layers if isinstance(
-        layer, tf.keras.layers.Layer)]
     return model
 
 
@@ -116,10 +111,4 @@ def define_densefs_model(dims, bc=False):
     model = keras.Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=keras.optimizers.SGD(
         lr=0.01, momentum=0.9), loss=['sparse_categorical_crossentropy', None])
-
-    # Bug with add_loss puts empty dict at the end of model._layers which
-    # interferes with some functionality (such as
-    # tf.keras.utils.plot_model)
-    model._layers = [layer for layer in model._layers if isinstance(
-        layer, tf.keras.layers.Layer)]
     return model
