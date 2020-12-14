@@ -62,6 +62,7 @@ def extract_data(loss_logs, fields, max_x=-1):
             autoencoders
         fields: types of values to plot (each gets its own subplot, e.g.
             nonzero_mae, loss, prior_mean, etc.)
+        max_x: limit plots to <max_x> iterations from start
 
     Returns:
         dict containing mappings from each field (e.g. nonzero_mae, loss,
@@ -77,12 +78,18 @@ def extract_data(loss_logs, fields, max_x=-1):
     for loss_log in loss_logs:
         exp = '/'.join(str(loss_log).split('/')[-5:])
         config = loss_log.parent / 'config'
+        skip = False
         with open(config, 'r') as f:
             for line in f.readlines():
                 param = line.split()[0]
                 value = line.split()[1]
                 if param == 'adversarial_variance':
                     extra_info[exp][param] = float(value)
+                if param == 'densefs':
+                    skip = True
+                    break
+        if skip:
+            continue
         df = pd.read_csv(loss_log, sep=' ')
         print(exp)
         for field in fields:
