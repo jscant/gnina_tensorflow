@@ -168,8 +168,7 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
     current_rec = paths[0][1]
     encodings = []
     start_time = time.time()
-    recon_statistics = 'structure original_mean original_var reconstruction_mean reconstruction_var '
-    panda_friendly_output = 'structure channel p statistic value\n'
+    panda_friendly_output = 'structure channel p statistic zero_nonzero value\n'
 
     try:
         encoder.get_layer('frac')
@@ -202,16 +201,6 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
             encodings.append((label, lig, encodings_numpy[batch_idx, :]))
             if collect_statistics:
                 channels = inputs[0].shape[1]
-                if batch_idx == 0 and iteration == 0:
-                    recon_statistics += ' '.join(
-                        ['channel_{0}_original_mean channel_{0}_original_var '
-                         'channel_{0}_reconstruction_mean '
-                         'channel_{0}_reconstruction_var'.format(c) for c in
-                         range(channels)]
-                    ) + '\n'
-
-                recon_statistics += '{} '.format(
-                    batch_size * iteration + batch_idx)
                 input_struct = inputs[0][batch_idx, :, :, :, :]
                 reconstruction = reconstructions[batch_idx, :, :, :, :]
                 nz_input_struct = input_struct[np.where(input_struct > 0)]
@@ -220,21 +209,44 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                 nz_recon_var = np.var(nz_reconstruction)
                 nz_input_mean = np.mean(nz_input_struct)
                 nz_recon_mean = np.mean(nz_reconstruction)
-                recon_statistics += '{0:0.4f} {1:0.4f} {2:0.4f} {3:0.4f} '.format(
-                    nz_input_mean, nz_input_var, nz_recon_mean, nz_recon_var
-                )
+                z_input_struct = input_struct[np.where(input_struct == 0)]
+                z_reconstruction = reconstruction[np.where(input_struct == 0)]
+                z_input_var = np.var(z_input_struct)
+                z_recon_var = np.var(z_reconstruction)
+                z_input_mean = np.mean(z_input_struct)
+                z_recon_mean = np.mean(z_reconstruction)
 
                 panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                    global_idx, 'All', 'original', 'mean', nz_input_mean
+                    global_idx, 'All', 'original', 'mean', 'nonzero',
+                    nz_input_mean
                 )
                 panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                    global_idx, 'All', 'original', 'var', nz_input_var
+                    global_idx, 'All', 'original', 'var', 'nonzero',
+                    nz_input_var
                 )
                 panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                    global_idx, 'All', 'reconstruction', 'mean', nz_recon_mean
+                    global_idx, 'All', 'reconstruction', 'mean', 'nonzero',
+                    nz_recon_mean
                 )
                 panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                    global_idx, 'All', 'reconstruction', 'var', nz_recon_var
+                    global_idx, 'All', 'reconstruction', 'var', 'nonzero',
+                    nz_recon_var
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'original', 'mean', 'zero',
+                    z_input_mean
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'original', 'var', 'zero',
+                    z_input_var
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'reconstruction', 'mean', 'zero',
+                    z_recon_mean
+                )
+                panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                    global_idx, 'All', 'reconstruction', 'var', 'zero',
+                    z_recon_var
                 )
                 for channel in range(channels):
                     input_channel = input_struct[channel, :, :, :]
@@ -247,31 +259,49 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
                     nz_recon_channel_var = np.var(nz_recon_channel)
                     nz_input_channel_mean = np.mean(nz_input_channel)
                     nz_recon_channel_mean = np.mean(nz_recon_channel)
-                    recon_statistics += '{0:0.4f} {1:0.4f} {2:0.4f} {3:0.4f} '.format(
-                        nz_input_channel_mean, nz_input_channel_var,
-                        nz_recon_channel_mean, nz_recon_channel_var
-                    )
+                    z_input_channel = input_channel[
+                        np.where(input_channel == 0)]
+                    z_recon_channel = recon_channel[
+                        np.where(input_channel == 0)]
+                    z_input_channel_var = np.var(z_input_channel)
+                    z_recon_channel_var = np.var(z_recon_channel)
+                    z_input_channel_mean = np.mean(z_input_channel)
+                    z_recon_channel_mean = np.mean(z_recon_channel)
                     panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                        global_idx, channel, 'original', 'mean',
+                        global_idx, channel, 'original', 'mean', 'nonzero',
                         nz_input_channel_mean
                     )
                     panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                        global_idx, channel, 'original', 'var',
+                        global_idx, channel, 'original', 'var', 'nonzero',
                         nz_input_channel_var
                     )
                     panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
                         global_idx, channel, 'reconstruction', 'mean',
+                        'nonzero',
                         nz_recon_channel_mean
                     )
                     panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
-                        global_idx, channel, 'reconstruction', 'var',
+                        global_idx, channel, 'reconstruction', 'var', 'nonzero',
                         nz_recon_channel_var
                     )
-                recon_statistics = recon_statistics[:-1] + '\n'
-                if not iteration % 100:
-                    with open(recon_statistics_path, 'a') as f:
-                        f.write(recon_statistics)
-                    recon_statistics = ''
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'original', 'mean', 'zero',
+                        z_input_channel_mean
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'original', 'var', 'zero',
+                        z_input_channel_var
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'reconstruction', 'mean', 'zero',
+                        z_recon_channel_mean
+                    )
+                    panda_friendly_output += '{0} {1} {2} {3} {4:.4f}\n'.format(
+                        global_idx, channel, 'reconstruction', 'var', 'zero',
+                        z_recon_channel_var
+                    )
+
+                if not iteration % 100 or iteration == iterations - 1:
                     with open(pd_friendly_recon_statistics_path, 'a') as f:
                         f.write(panda_friendly_output)
                     panda_friendly_output = ''
