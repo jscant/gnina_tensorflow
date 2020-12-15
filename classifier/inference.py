@@ -175,9 +175,9 @@ if __name__ == '__main__':
                 param = chunks[0]
                 value = chunks[1]
                 if param == 'recmap':
-                    recmap = value if value is not 'None' else None
+                    recmap = value if value != 'None' else None
                 elif param == 'ligmap':
-                    ligmap = value if value is not 'None' else None
+                    ligmap = value if value != 'None' else None
                 elif param == 'dimension':
                     dimension = float(value)
                 elif param == 'resolution':
