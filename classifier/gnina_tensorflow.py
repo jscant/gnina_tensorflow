@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
 import psutil
+from tensorflow.keras import backend as K
 from tensorflow.keras.utils import plot_model
 
 from autoencoder.parse_command_line_args import pickup, LoadConfigTrain
@@ -234,6 +235,8 @@ def main():
     mem_attributes = ('rss', 'shared', 'vms', 'data', 'text')
 
     for iteration in range(starting_iter, args.iterations):
+        K.clear_session()
+
         if (not (iteration + 1) % args.save_interval and
                 iteration < args.iterations - 1):
             checkpoint_path = Path(
