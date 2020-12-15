@@ -24,7 +24,7 @@ from autoencoder.autoencoder_definitions import zero_mse, nonzero_mse, \
     composite_mse, nonzero_mae, zero_mae, trimmed_nonzero_mae, trimmed_zero_mae, \
     close_mae, close_nonzero_mae, close_zero_mae
 from utilities.gnina_functions import get_test_info, Timer, process_batch, \
-    print_with_overwrite, write_process_info
+    print_with_overwrite, write_process_info, format_time
 
 
 def inference(model, test_types, data_root, save_path, batch_size, labels=None,
@@ -151,7 +151,7 @@ def inference(model, test_types, data_root, save_path, batch_size, labels=None,
             iterations + int(size % batch_size),
             iterations + int(size % batch_size)))
 
-    print('Total inference time:', t.interval, 's')
+    print('Total inference time:', format_time(t.interval))
 
 
 if __name__ == '__main__':
