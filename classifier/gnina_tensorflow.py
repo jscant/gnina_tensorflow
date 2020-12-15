@@ -17,6 +17,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import molgrid
 import numpy as np
+import psutil
 from tensorflow.keras.utils import plot_model
 
 from autoencoder.parse_command_line_args import pickup, LoadConfigTrain
@@ -228,6 +229,10 @@ def main():
     loss_history_fname = Path(args.save_path, 'loss_log.txt')
     start_time = time.time()
 
+    process = psutil.Process()
+    mem_str = 'Time Memory_type Usage\n'
+    mem_attributes = ('rss', 'shared', 'vms', 'data', 'text')
+
     for iteration in range(starting_iter, args.iterations):
         if (not (iteration + 1) % args.save_interval and
                 iteration < args.iterations - 1):
@@ -256,6 +261,14 @@ def main():
         time_remaining = time_per_iter * (args.iterations - iteration - 1)
         formatted_eta = format_time(time_remaining)
 
+        time_elapsed = time.time() - start_time
+
+        mem_info = process.memory_info()
+        for attribute in mem_attributes:
+            mem_str += '{0:.3f} {1} {2}\n'.format(
+                time_elapsed, attribute, getattr(mem_info, attribute)
+            )
+
         if not iteration:
             print('\n')
 
@@ -264,6 +277,10 @@ def main():
             iteration, args.iterations, loss, format_time(time_elapsed),
             formatted_eta)
         print_with_overwrite(console_output)
+
+        if not iteration % 10 or iteration == args.iterations - 1:
+            with open(args.save_path / 'memory_history.txt', 'w') as f:
+                f.write(mem_str)
 
     # Save model for later inference
     checkpoint_path = args.save_path / 'checkpoints' / 'final_model_{}'.format(
