@@ -90,8 +90,8 @@ def extract_data(loss_logs, fields, max_x=-1):
                     break
         if skip:
             continue
+        print(loss_log.parent)
         df = pd.read_csv(loss_log, sep=' ')
-        print(exp)
         for field in fields:
             try:
                 if max_x > 0:
@@ -111,6 +111,10 @@ def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
          field: the title of the values to be plotted (nonzero_mae, loss, etc.)
          gap: smoothing factor (1 or greater)
          ax: matplotlib subplot ax to draw on
+         extra_info: dict of dicts containing information about adversarial
+            constraints of the format {field: {experiment}}
+         colours: iterable of matplotlib colour codes to use first (e.g.
+            ['k', 'b', 'r']).
 
     Returns:
         Tuple with max and min y values for all values in data for the specified
@@ -120,6 +124,8 @@ def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
     min_y = np.inf
     for idx, (exp, y) in enumerate(data[field].items()):
         line_marker = '-'
+        if len(set(y)) == 1:
+            continue
         if isinstance(colours, list):
             if idx < len(colours):
                 line_marker = colours[idx] + line_marker
@@ -128,10 +134,7 @@ def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
             trunc_x = len(x) // 100
             mean_value = extra_info.get(exp, {}).get('adversarial_variance')
             if mean_value is not None:
-                if len(data[field].keys()) == 1:
-                    ax.axhline(mean_value, color='k', linestyle='--')
-                else:
-                    ax.axhline(mean_value, linestyle='--')
+                ax.axhline(mean_value, color='k', linestyle='--')
         else:
             trunc_x = 0
             if field == 'latent_mean':
@@ -139,7 +142,6 @@ def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
             elif field == 'ks_p_value':
                 ax.axhline(0.05, color='k', linestyle='--')
         ax.plot(x, condensed_y, line_marker, label=exp)
-
         max_y = max(max_y, np.amax(condensed_y[trunc_x:]))
         min_y = min(min_y, np.amin(condensed_y[trunc_x:]))
 
@@ -150,7 +152,9 @@ def plot_ax(data, field, gap, ax, extra_info=None, colours=None):
     ax.legend()
     ax.grid()
     ax.set_title(field)
-    return max_y, min_y
+    if max_y > -np.inf:
+        return max_y, min_y
+    return None, None
 
 
 def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
@@ -179,6 +183,8 @@ def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
     mean_max_y, mean_min_y = -np.inf, np.inf
     var_max_y, var_min_y = -np.inf, np.inf
     for field in fields:
+        if ax_dict[field][1] is None:
+            continue
         if field.endswith('_mean'):
             mean_max_y = max(mean_max_y, ax_dict[field][1])
             mean_min_y = min(mean_min_y, ax_dict[field][2])
@@ -188,6 +194,8 @@ def plot(filenames, fields, gap, max_x=-1, upload=False, colours=None):
 
     var_max_y = min(var_max_y, 50)
     for field in fields:
+        if ax_dict[field][1] is None:
+            continue
         if field.endswith('_mean'):
             if mean_min_y >= 0:
                 ax_dict[field][0].set_ylim(
