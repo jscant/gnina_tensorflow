@@ -11,50 +11,13 @@ for the expressiveness of the penultimate layer of a trained gnina model.
 """
 
 import argparse
-from collections import deque
 from pathlib import Path
 
 import joblib
-import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
-from utilities import gnina_embeddings_pb2
-from utilities.gnina_functions import Timer, format_time, write_process_info
-
-
-def get_embeddings_arr(directory):
-    """Reads serialised embeddings in from protobuffer format.
-
-    Directory should contain .bin files generated using gnina_tensoflow.py.
-    Each serialised .bin file should contain one protein message, which in
-    turn should contain all the ligand messages associated with that target.
-
-    Arguments:
-        directory: Directory containing serialised gnina embeddings, as
-            defined in gnina_embeddings.proto.
-    
-    Returns:
-        Numpy arrays containing both the embeddings and the labels, along with
-        a dictionary mapping the index of each embedding/label along to a
-        tuple containing the relative path of the protein and ligand gninatypes
-        file used to generate that embedding.
-    """
-    embeddings = deque()
-    labels = deque()
-    paths = deque()
-
-    for idx, filename in enumerate(Path(directory).glob('*.bin')):
-        encodings = gnina_embeddings_pb2.protein()
-        encodings.ParseFromString(open(filename, 'rb').read())
-        target_path = encodings.path
-        for ligand_struct in encodings.ligand:
-            label = ligand_struct.label
-            embeddings.append(np.array(ligand_struct.embedding))
-            labels.append(label)
-            ligand_path = ligand_struct.path
-            paths.append((target_path, ligand_path))
-    path_dict = {idx: path_tup for idx, path_tup in enumerate(paths)}
-    return np.array(embeddings), np.array(labels), path_dict
+from utilities.gnina_functions import Timer, format_time, write_process_info, \
+    get_embeddings_arr
 
 
 def main(args):
