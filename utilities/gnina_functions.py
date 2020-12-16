@@ -257,20 +257,18 @@ def process_batch(model, example_provider, gmaker, input_tensor,
             pass
         else:
             inputs.update({'distances': np.zeros_like(input_numpy)})
-        gnina_input, _ = autoencoder.predict_on_batch(inputs)
-    else:
-        gnina_input = input_numpy
+        input_numpy, _ = autoencoder.predict_on_batch(inputs)
 
     if labels_tensor is None:  # We don't know labels; just return predictions
-        return model.predict_on_batch(gnina_input)
+        return model.predict_on_batch(input_numpy)
 
     batch.extract_label(0, labels_tensor)  # y_true
     if train:  # Return loss
         return model.train_on_batch(
-            gnina_input, labels_tensor.tonumpy())
+            input_numpy, labels_tensor.tonumpy())
     else:  # Return labels, predictions
         return (labels_tensor.tonumpy(),
-                model.predict_on_batch(gnina_input))
+                model.predict_on_batch(input_numpy))
 
 
 def _calculate_ligand_distances(rec_channels, input_tensor, point_dist):
