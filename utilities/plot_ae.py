@@ -28,6 +28,7 @@ Usage:
 """
 
 import argparse
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -40,6 +41,8 @@ except ImportError:
     upload_to_imgur = None
 from matplotlib import pyplot as plt
 from utilities.gnina_functions import condense
+
+USER = os.getenv('USER')
 
 
 def get_loss_logs(filenames):
@@ -90,7 +93,7 @@ def extract_data(loss_logs, fields, max_x=-1):
                     break
         if skip:
             continue
-        print(loss_log.parent)
+        print(str(loss_log.parent.resolve()).replace('/home/' + USER, '~'))
         df = pd.read_csv(loss_log, sep=' ')
         for field in fields:
             try:
