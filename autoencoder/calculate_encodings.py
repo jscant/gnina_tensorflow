@@ -363,6 +363,13 @@ def calculate_encodings(encoder, data_root, batch_size, types_file, save_path,
             encodings = []
             current_rec = rec
         encodings.append((label, lig, encodings_numpy[batch_idx, :]))
+        if collect_statistics:
+            panda_friendly_output += generate_reconstruction_statistics(
+                inputs[0], reconstructions, global_idx, batch_idx)
+
+            if not iteration % 100 or iteration == iterations - 1:
+                with open(pd_friendly_recon_statistics_path, 'a') as f:
+                    f.write(panda_friendly_output)
 
     if len(encodings):  # Encodings that have not been saved (final receptor)
         write_encodings_to_disk(current_rec, encodings)
