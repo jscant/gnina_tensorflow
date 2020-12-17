@@ -51,7 +51,7 @@ def main(args):
     input_files = [
         input_file for input_dirs in input_files for input_file in input_dirs]
     if len(input_files) == 1:
-        output_filename = input_dirs[0].parent / args.output_filename
+        output_filename = input_dirs[0].parent / Path(args.output_filename).name
     else:
         setattr(args, 'reconstructions_only', True)
         output_filename = Path(args.output_filename).expanduser()
@@ -70,8 +70,10 @@ def main(args):
             fdf['Job path'] = truncated_fname
             df = pd.concat([df, fdf], copy=False)
 
+    df = df[df['statistic'] == 'mean']
     df.rename(columns={'value': 'Value', 'p': 'Source', 'channel': 'Channel',
-                       'statistic': 'Statistic'}, inplace=True)
+                       'statistic': 'Statistic',
+                       'zero_nonzero': 'Zero/Nonzero'}, inplace=True)
     for original, replacement in zip(
             ['mean', 'var', 'reconstruction', 'original'],
             ['Mean', 'Variance', 'Reconstruction', 'Original']):
@@ -96,7 +98,7 @@ def main(args):
     with Timer() as t:
         if args.reconstructions_only:
             g = sns.FacetGrid(
-                df, col='Statistic', row='Channel', hue='Job path', height=5,
+                df, col='Zero/Nonzero', row='Channel', hue='Job path', height=5,
                 aspect=1,
                 sharex=True, sharey=False, legend_out=False)
         else:
@@ -123,8 +125,8 @@ if __name__ == '__main__':
     parser.add_argument('input_dirs', type=str, nargs='?',
                         help='Directories containing, at some level, '
                              'files named "pd_friendly_stats.txt"')
-    parser.add_argument('output_filename', type=str, nargs='?',
-                        default='hist.png', help='Name of output plot')
+    parser.add_argument('--output_filename', type=str,
+                        default='~/hist.png', help='Name of output plot')
     parser.add_argument('--recmap', '-r', type=str, required=False,
                         help='Atom map with different smina types on each line')
     parser.add_argument('--ligmap', '-l', type=str, required=False,
