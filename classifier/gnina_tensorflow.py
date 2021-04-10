@@ -12,6 +12,7 @@ Requirements: libmolgrid, pytorch (1.3.1), tensorflow 2.2.0+
 import argparse
 import os
 import time
+import wandb
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -117,7 +118,12 @@ def main():
         default=np.random.randint(0, int(1e7)),
         help=('Number used to seed molgrid; default is a random integer on the '
               'interval [0, 1e7)'))
+    parser.add_argument(
+        '--wandb_project', type=str, help='Name of wandb project')
+    parser.add_argument(
+        '--wandb_run', type=str, help='Name of wandb run')
     args = parser.parse_args()
+    cmd_line_args = vars(args)
 
     for item in vars(args):
         print(item, getattr(args, item))
@@ -234,6 +240,15 @@ def main():
     mem_str = 'Time Memory_type Usage\n'
     mem_attributes = ('rss', 'shared', 'vms', 'data', 'text')
 
+    if args.wandb_project is not None:
+        wandb_init_kwargs = {
+            'project': args.wandb_project, 'allow_val_change': True,
+            'config': cmd_line_args
+        }
+        wandb.init(**wandb_init_kwargs)
+        if args.wandb_run is not None:
+            wandb.run.name = args.wandb_run
+
     for iteration in range(starting_iter, args.iterations):
         K.clear_session()
 
@@ -253,6 +268,12 @@ def main():
         # Save losses to disk
         if not isinstance(loss, float):
             loss = loss[0]
+
+        try:
+            wandb.log({'Binary crossentropy': loss})
+        except wandb.errors.error.Error:
+            pass  # wandb has not been initialised so ignore
+
         losses.append(loss)
         losses_string += '{1} loss: {0:0.3f}\n'.format(loss, iteration)
         with open(loss_history_fname, 'w') as f:
